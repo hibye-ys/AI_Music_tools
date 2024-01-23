@@ -1,0 +1,17 @@
+version: '3'
+services:
+  web-server:
+    build: .
+    env_file:
+      - .env
+    command: uvicorn client:app --host 0.0.0.0 --port 80
+    ports:
+      - "8000:80"
+    depends_on:
+      - inference-server
+
+  inference-server:
+    build: .
+    env_file:
+      - .env
+    command: uvicorn main:app --host 0.0.0.0 --port 80
