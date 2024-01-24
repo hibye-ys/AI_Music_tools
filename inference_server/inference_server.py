@@ -1,10 +1,10 @@
-from fastapi import FastAPI, File, UploadFile , HTTPException
+from fastapi import FastAPI, File, UploadFile , HTTPException, BackgroundTasks
 from fastapi.responses import HTMLResponse
 import requests
 import boto3
 from botocore.exceptions import NoCredentialsError
 from pathlib import Path
-import glob
+
 import inference
 import json
 import tempfile
@@ -24,10 +24,7 @@ region_name = os.getenv("REGION_NAME")
 async def main():
     return 'O_O'
 
-
-###### process_audio #######
-@app.post('/process_audio/')
-def process_audio(filename:str):
+def separate_model(filename:str):
     s3 = boto3.client('s3', aws_access_key_id=aws_access_key,
                 aws_secret_access_key=aws_secret_access_key,
                 region_name=region_name)
@@ -52,8 +49,7 @@ def process_audio(filename:str):
         options = json.load(file)
 
     print('options', options)
-    
-    
+
     inference.predict_with_model(input_audios=temp_file_path,
                                 output_folder=processed_temp_dir.name,
                                 options=options)
@@ -68,5 +64,12 @@ def process_audio(filename:str):
     temp_dir.cleanup()
     processed_temp_dir.cleanup()
 
-
     return 'success inference'
+
+###### process_audio #######
+@app.post('/process_audio/')
+def process_audio(filename:str, background_tasks: BackgroundTasks):
+    
+    background_tasks.add_task(separate_model, filename)
+
+    return 'success'

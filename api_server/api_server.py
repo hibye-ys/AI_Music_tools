@@ -3,6 +3,7 @@ from fastapi.responses import HTMLResponse
 import shutil
 import os
 import boto3
+from botocore.exceptions import NoCredentialsError, ClientError
 import requests
 import tempfile
 from dotenv import load_dotenv
@@ -49,19 +50,20 @@ def check_processed_audio_inS3(filename : str):
 
     #check file exist 
     filename = filename.split('.')[0]
+    print(filename)
     
     try:
         filenames = [f'{filename}_vocals.wav', f'{filename}_instrum.wav']
-
+        print(filenames)
         download_uris = []
         for file in filenames:
-            s3.head_object(Bucket='s3musicproject', key=file)
+            s3.head_object(Bucket='s3musicproject', Key=file)
             download_uri = f"https://s3musicproject.s3.amazonaws.com/{file}"
             download_uris.append(download_uri)
 
         return download_uris
     
-    except s3.exceptions.NoSuchKey:
+    except s3.exceptions.NoSuchKey as e:
         return "processing..."
     
     except NoCredentialsError:
