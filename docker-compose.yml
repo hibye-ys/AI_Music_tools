@@ -1,17 +1,24 @@
-version: '3'
+version: '3.9'
 services:
   web-server:
-    build: .
-    env_file:
-      - .env
-    command: uvicorn client:app --host 0.0.0.0 --port 80
+    build: ./api_server
+
+    command: uvicorn api_server:app --host 0.0.0.0 --port 5000 --reload
+
     ports:
-      - "8000:80"
-    depends_on:
-      - inference-server
+      - "5000:5000"
 
   inference-server:
-    build: .
-    env_file:
-      - .env
-    command: uvicorn main:app --host 0.0.0.0 --port 80
+    build: ./inference_server
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    ports:
+      - "10000:10000"
+
+    command: uvicorn inference_server:app --host 0.0.0.0 --port 10000 --reload

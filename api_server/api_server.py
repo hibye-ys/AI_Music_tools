@@ -32,10 +32,11 @@ async def request_to_inference(audio: UploadFile = File(...)):
     
 
     s3.upload_file(file_path, 's3musicproject', audio.filename)
+    print('uploaded:', audio.filename)
 
     ##request to inference_server
-    inference_url = ''
-    response = requests.post(inference_url, audio.filename) #S3 FILE PATH, NOT FILENAME
+    inference_url = f'http://0.0.0.0:10000/process_audio/?filename={audio.filename}'
+    response = requests.post(inference_url, audio.filename)
 
     os.remove(file_path)
 

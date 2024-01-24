@@ -8,11 +8,10 @@ WORKDIR /usr/src/app
 COPY . .
 
 # 필요한 라이브러리 설치
-RUN pip install --upgrade pip setuptools wheel --no-cache-dir -r requirements.txt
+#RUN apt update && apt-get install build-essential
+RUN pip install --upgrade pip setuptools wheel
+RUN pip install --no-cache-dir -r requirements.txt
 
-
-# 포트 8000 노출
-EXPOSE 8000
 
 # FastAPI 애플리케이션 실행
-CMD ["uvicorn", "inference_server:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "inference_server:app", "--host", "0.0.0.0", "--port", "10000"]
