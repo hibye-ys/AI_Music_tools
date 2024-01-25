@@ -7,6 +7,8 @@ from botocore.exceptions import NoCredentialsError, ClientError
 import requests
 import tempfile
 from dotenv import load_dotenv
+from typing import List, Optional, Union
+from pydantic import BaseModel, Field
 
 load_dotenv()
 
@@ -18,8 +20,14 @@ aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
 region_name = os.getenv("REGION_NAME")
 
 
+class UploadFileModel(BaseModel):
+    file: Optional[UploadFile] = None
+
+class CheckS3(BaseModel):
+    filename: str = Field(..., description="Name of file to check in S3")
+
 @app.post("/uploadfile/")
-async def request_to_inference(audio: UploadFile = File(...)):
+async def request_to_inference(audio: UploadFileModel):
     s3 = boto3.client('s3', aws_access_key_id=aws_access_key,
                 aws_secret_access_key=aws_secret_access_key,
                 region_name=region_name)
@@ -44,7 +52,7 @@ async def request_to_inference(audio: UploadFile = File(...)):
 
 
 @app.get('/check_s3/')
-def check_processed_audio_inS3(filename : str):
+def check_processed_audio_inS3(filename : CheckS3):
     s3 = boto3.client('s3', aws_access_key_id=aws_access_key,
                 aws_secret_access_key=aws_secret_access_key,
                 region_name=region_name)

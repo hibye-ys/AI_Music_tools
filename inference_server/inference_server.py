@@ -4,7 +4,7 @@ import requests
 import boto3
 from botocore.exceptions import NoCredentialsError
 from pathlib import Path
-
+from pydantic import BaseModel, Field, ValidationError
 import inference
 import json
 import tempfile
@@ -24,7 +24,25 @@ region_name = os.getenv("REGION_NAME")
 async def main():
     return 'O_O'
 
-def separate_model(filename:str):
+class FileNameModel(BaseModel):
+    filename:str = None
+
+class optionsModel(BaseModel):
+    overlap_demucs: float
+    overlap_VOCFT: float
+    overlap_VitLarge: int
+    overlap_InstVoc: int
+    weight_InstVoc: float
+    weight_VOCFT: float
+    weight_VitLarge: float
+    single_onnx: str
+    large_gpu: str
+    BigShifts: int
+    vocals_only: bool
+    use_VOCFT: bool
+    output_format: str
+
+def separate_model(filename:FileNameModel):
     s3 = boto3.client('s3', aws_access_key_id=aws_access_key,
                 aws_secret_access_key=aws_secret_access_key,
                 region_name=region_name)
@@ -45,10 +63,14 @@ def separate_model(filename:str):
     processed_temp_dir = tempfile.TemporaryDirectory()
 
     #options 에서 input, output 을 빼고 임시 디렉토리 경로를 받을 수 있게 경로를 수정
-    with open('options.json', 'r') as file:
-        options = json.load(file)
+    try:
+        with open('options.json', 'r') as file:
+            options_data = json.load(file)
+        options = optionsModel(**options_data)
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=f'Invalid options format: {e}')
 
-    print('options', options)
+    print('options', options.model_dump())
 
     inference.predict_with_model(input_audios=temp_file_path,
                                 output_folder=processed_temp_dir.name,
@@ -68,7 +90,7 @@ def separate_model(filename:str):
 
 ###### process_audio #######
 @app.post('/process_audio/')
-def process_audio(filename:str, background_tasks: BackgroundTasks):
+def process_audio(filename:FileNameModel, background_tasks: BackgroundTasks):
     
     background_tasks.add_task(separate_model, filename)
 
