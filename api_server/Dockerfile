@@ -8,8 +8,8 @@ WORKDIR /usr/src/app
 COPY . .
 
 # 필요한 라이브러리 설치
-RUN pip install --no-cache-dir fastapi[all] uvicorn boto3 python-dotenv requests
+RUN pip install -r requirements.txt
 
 
 # FastAPI 애플리케이션 실행
-#CMD ["uvicorn", "api_server:app", "--host", "0.0.0.0", "--port", "5000"]
+ENTRYPOINT ["python", "run_server.py"]

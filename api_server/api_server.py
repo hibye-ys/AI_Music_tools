@@ -1,82 +1,87 @@
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import HTMLResponse
-import shutil
-import os
+from pydantic_settings import BaseSettings
 import boto3
-from botocore.exceptions import NoCredentialsError, ClientError
 import requests
-import tempfile
 from dotenv import load_dotenv
-from typing import List, Optional, Union
-from pydantic import BaseModel, Field
+from typing import Optional, Literal
+from pydantic import BaseModel, Field, Form
 
 load_dotenv()
 
 app = FastAPI()
 
-#aws_api_keys
-aws_access_key = os.getenv('AWS_ACCESS_KEY')
-aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
-region_name = os.getenv("REGION_NAME")
+class APIServerSettings(BaseSettings):
+    bucket_name: str = 's3musicproject'
+    aws_access_key: str
+    aws_secret_access_key: str
+    region_name: str
+    inference_url: str
+
+
+settings = APIServerSettings()
 
 
 class UploadFileModel(BaseModel):
     file: Optional[UploadFile] = None
 
-class CheckS3(BaseModel):
-    filename: str = Field(..., description="Name of file to check in S3")
-
-@app.post("/uploadfile/")
-async def request_to_inference(audio: UploadFileModel):
-    s3 = boto3.client('s3', aws_access_key_id=aws_access_key,
-                aws_secret_access_key=aws_secret_access_key,
-                region_name=region_name)
+class DownloadRequest(BaseModel):
+    file_prefix: str = Field(..., description="Name of file to check in S3")
+    
+class SeparateResponse(BaseModel):
+    remote_path: str
+    status_code: int
     
 
+class DownloadResponse(BaseModel):
+    vocal: Optional[str]
+    instrum: Optional[str]
+    status: Literal["Processing", "Completed"]
     
-    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-        temp_file.write(await audio.read())
-        file_path = temp_file.name
-    
 
-    s3.upload_file(file_path, 's3musicproject', audio.filename)
-    print('uploaded:', audio.filename)
-
-    ##request to inference_server
-    inference_url = f'http://0.0.0.0:10000/process_audio/?filename={audio.filename}'
-    response = requests.post(inference_url, audio.filename)
-
-    os.remove(file_path)
-
-    return {'upload success': audio.filename, 'reuest to inference': response.status_code}
+def get_s3_client(settings: APIServerSettings):
+    return boto3.client(
+        's3',
+        aws_access_key_id=settings.aws_access_key,
+        aws_secret_access_key=settings.aws_secret_access_key,
+        region_name=settings.region_name,
+    )
 
 
-@app.get('/check_s3/')
-def check_processed_audio_inS3(filename : CheckS3):
-    s3 = boto3.client('s3', aws_access_key_id=aws_access_key,
-                aws_secret_access_key=aws_secret_access_key,
-                region_name=region_name)
+@app.post("/separate", response_model=SeparateResponse)
+def request_to_inference(audio: UploadFile = File(...), user_id: str = Form()):
+    s3 = get_s3_client(settings)
+    remote_path = f"{user_id}/{audio.filename}"
+    s3.upload_fileobj(audio.file, settings.bucket_name, remote_path)
 
-    #check file exist 
-    filename = filename.split('.')[0]
-    print(filename)
-    
+    # request to inference_server
+    response = requests.post(settings.inference_url, {"path": remote_path})
+
+    return SeparateResponse(
+        remote_path=remote_path,
+        status_code=response.status_code
+    )
+
+
+@app.get('/download')
+def check_processed_audio_inS3(request: DownloadRequest):
+    s3 = get_s3_client(settings)
     try:
-        filenames = [f'{filename}_vocals.wav', f'{filename}_instrum.wav']
-        print(filenames)
-        download_uris = []
-        for file in filenames:
-            s3.head_object(Bucket='s3musicproject', Key=file)
-            download_uri = f"https://s3musicproject.s3.amazonaws.com/{file}"
-            download_uris.append(download_uri)
-
-        return download_uris
-    
+        vocal_path = f'public/{request.file_prefix}_vocals.wav'
+        instrum_path = f'public/{request.file_prefix}_instrum.wav'
+        s3.head_object(Bucket=settings.bucket_name, Key=vocal_path)
+        s3.head_object(Bucket=settings.bucket_name, Key=instrum_path)
     except s3.exceptions.NoSuchKey as e:
-        return "processing..."
-    
-    except NoCredentialsError:
-        return 'Wrong AWS auth Information'
+        return DownloadResponse(
+            vocal=None,
+            instrum=None,
+            status="Processing"
+        )
+    return DownloadResponse(
+        vocal=f"https://s3musicproject.s3.amazonaws.com/{vocal_path}",
+        instrum=f"https://s3musicproject.s3.amazonaws.com/{instrum_path}",
+        status="Completed",
+    )
 
 
 @app.get("/")
