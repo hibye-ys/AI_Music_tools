@@ -1,11 +1,11 @@
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.responses import HTMLResponse
 from pydantic_settings import BaseSettings
 import boto3
 import requests
 from dotenv import load_dotenv
 from typing import Optional, Literal
-from pydantic import BaseModel, Field, Form
+from pydantic import BaseModel, Field
 
 load_dotenv()
 
@@ -13,10 +13,13 @@ app = FastAPI()
 
 class APIServerSettings(BaseSettings):
     bucket_name: str = 's3musicproject'
-    aws_access_key: str
-    aws_secret_access_key: str
-    region_name: str
+    AWS_ACCESS_KEY: str
+    AWS_SECRET_ACCESS_KEY: str
+    REGION_NAME: str
     inference_url: str
+    
+    class Config:
+        env_file = '.env'
 
 
 settings = APIServerSettings()
@@ -42,9 +45,9 @@ class DownloadResponse(BaseModel):
 def get_s3_client(settings: APIServerSettings):
     return boto3.client(
         's3',
-        aws_access_key_id=settings.aws_access_key,
-        aws_secret_access_key=settings.aws_secret_access_key,
-        region_name=settings.region_name,
+        aws_access_key_id=settings.AWS_ACCESS_KEY,
+        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+        region_name=settings.REGION_NAME,
     )
 
 
@@ -88,7 +91,7 @@ def check_processed_audio_inS3(request: DownloadRequest):
 async def main():
     content = """
 <body>
-<form action="/uploadfile/" enctype="multipart/form-data" method="post">
+<form action="/separate/" enctype="multipart/form-data" method="post">
 <input name="file" type="file">
 <input type="submit">
 </form>

@@ -46,9 +46,9 @@ def separate_model(path: str):
             output_folder=temp_dir,
             options=options
         )
-        vocal_local_path = f"{temp_dir}/origin_vocal.wav"
+        vocal_local_path = f"{temp_dir}/origin_vocals.wav"
         instrum_local_path = f"{temp_dir}/origin_instrum.wav"
-        vocal_remote_path = f"public/{os.path.splitext(path)[0]}_vocal.wav"
+        vocal_remote_path = f"public/{os.path.splitext(path)[0]}_vocals.wav"
         instrum_remote_path = f"public/{os.path.splitext(path)[0]}_instrum.wav"
         s3.upload_file(vocal_local_path, "s3musicproject", vocal_remote_path)
         s3.upload_file(instrum_local_path, "s3musicproject", instrum_remote_path)

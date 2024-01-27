@@ -15,3 +15,4 @@ uvicorn
 boto3
 requests
 pydantic
+pydantic[dotenv]
