@@ -5,6 +5,7 @@ import boto3
 from botocore.exceptions import NoCredentialsError
 from pathlib import Path
 from pydantic import BaseModel, Field, ValidationError
+from pydantic_settings import BaseSettings
 import inference
 import json
 import tempfile
@@ -15,10 +16,13 @@ load_dotenv()
 
 app = FastAPI()
 
-#aws_api_keys
-aws_access_key = os.getenv('AWS_ACCESS_KEY')
-aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
-region_name = os.getenv("REGION_NAME")
+class InferenceServerSettings(BaseSettings):
+    bucket_name: str = 's3musicproject'
+    AWS_ACCESS_KEY: str
+    AWS_SECRET_ACCESS_KEY: str
+    REGION_NAME: str
+
+settings = InferenceServerSettings()
 
 @app.get("/")
 async def main():
@@ -28,11 +32,17 @@ class InferenceRequest(BaseModel):
     path: str = None
 
 
-def separate_model(path: str):
-    s3 = boto3.client('s3', aws_access_key_id=aws_access_key,
-                aws_secret_access_key=aws_secret_access_key,
-                region_name=region_name)
+def get_s3_client(settings: InferenceServerSettings):
+    return boto3.client(
+        's3',
+        aws_access_key_id=settings.AWS_ACCESS_KEY,
+        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+        region_name=settings.REGION_NAME,
+    )
 
+
+def separate_model(path: str):
+    s3 = get_s3_client(settings)
     # 임시 디렉토리 설정
     with tempfile.TemporaryDirectory() as temp_dir:
         local_file_path = f"{temp_dir}/origin.wav"

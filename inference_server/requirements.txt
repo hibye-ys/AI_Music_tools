@@ -4,6 +4,7 @@ scipy
 tqdm
 librosa
 demucs
+onnxruntime
 onnxruntime-gpu
 torch>=1.13.0
 pyyaml

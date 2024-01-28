@@ -17,16 +17,12 @@ class APIServerSettings(BaseSettings):
     AWS_SECRET_ACCESS_KEY: str
     REGION_NAME: str
     inference_url: str
-    
-    class Config:
-        env_file = '.env'
-
 
 settings = APIServerSettings()
 
 
-class UploadFileModel(BaseModel):
-    file: Optional[UploadFile] = None
+'''class UploadFileModel(BaseModel):
+    file: Optional[UploadFile] = None'''
 
 class DownloadRequest(BaseModel):
     file_prefix: str = Field(..., description="Name of file to check in S3")

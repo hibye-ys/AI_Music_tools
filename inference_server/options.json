@@ -6,7 +6,6 @@
 "weight_InstVoc": 8, 
 "weight_VOCFT": 1, 
 "weight_VitLarge": 5, 
-"single_onnx": "single_onnx", 
 "large_gpu": "large_gpu", 
 "BigShifts": 7, 
 "vocals_only": true, 

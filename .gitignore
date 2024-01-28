@@ -5,3 +5,4 @@ inference_server/__pycache__
 inference_server/.env
 inference_server/models/
 .venv/
+.env
