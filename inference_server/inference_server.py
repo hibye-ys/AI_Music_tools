@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile , HTTPException, BackgroundTasks
+from fastapi import FastAPI, File, UploadFile , HTTPException, BackgroundTasks, Form
 from fastapi.responses import HTMLResponse
 import requests
 import boto3
@@ -29,7 +29,7 @@ async def main():
     return 'O_O'
 
 class InferenceRequest(BaseModel):
-    path: str = None
+    path: str = Form(...)
 
 
 def get_s3_client(settings: InferenceServerSettings):

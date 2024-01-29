@@ -25,7 +25,7 @@ settings = APIServerSettings()
     file: Optional[UploadFile] = None'''
 
 class DownloadRequest(BaseModel):
-    file_prefix: str = Field(..., description="Name of file to check in S3")
+    file_prefix: str
     
 class SeparateResponse(BaseModel):
     remote_path: str
@@ -54,7 +54,7 @@ def request_to_inference(audio: UploadFile = File(...), user_id: str = Form()):
     s3.upload_fileobj(audio.file, settings.bucket_name, remote_path)
 
     # request to inference_server
-    response = requests.post(settings.inference_url, {"path": remote_path})
+    response = requests.post(settings.inference_url, json={"path": remote_path})
 
     return SeparateResponse(
         remote_path=remote_path,
@@ -62,7 +62,7 @@ def request_to_inference(audio: UploadFile = File(...), user_id: str = Form()):
     )
 
 
-@app.get('/download')
+@app.post('/download')
 def check_processed_audio_inS3(request: DownloadRequest):
     s3 = get_s3_client(settings)
     try:
