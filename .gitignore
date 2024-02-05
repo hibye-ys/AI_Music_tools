@@ -6,3 +6,4 @@ inference_server/.env
 inference_server/models/
 .venv/
 .env
+test.ipynb

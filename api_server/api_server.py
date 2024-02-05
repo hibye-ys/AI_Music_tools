@@ -6,6 +6,7 @@ import requests
 from dotenv import load_dotenv
 from typing import Optional, Literal
 from pydantic import BaseModel, Field
+import json
 
 load_dotenv()
 
@@ -29,7 +30,7 @@ class DownloadRequest(BaseModel):
     
 class SeparateResponse(BaseModel):
     remote_path: str
-    status_code: int
+    #status_code: int
     
 
 class DownloadResponse(BaseModel):
@@ -46,19 +47,35 @@ def get_s3_client(settings: APIServerSettings):
         region_name=settings.REGION_NAME,
     )
 
+def get_sqs_client(settings: APIServerSettings):
+    return boto3.resource(
+        'sqs',
+        aws_access_key_id=settings.AWS_ACCESS_KEY,
+        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+        region_name=settings.REGION_NAME,
+    )
+
+
 
 @app.post("/separate", response_model=SeparateResponse)
 def request_to_inference(audio: UploadFile = File(...), user_id: str = Form()):
     s3 = get_s3_client(settings)
+    sqs = get_sqs_client(settings)
     remote_path = f"{user_id}/{audio.filename}"
     s3.upload_fileobj(audio.file, settings.bucket_name, remote_path)
 
     # request to inference_server
-    response = requests.post(settings.inference_url, json={"path": remote_path})
+    #response = requests.post(settings.inference_url, json={"path": remote_path})
+
+    # to SQS
+    queue = sqs.get_queue_by_name(QueueName='music.fifo')
+    response = queue.send_message(MessageGroupId=user_id,
+                                  MessageDeduplicationId=remote_path,
+                                  MessageBody=json.dumps({"path": remote_path}))
 
     return SeparateResponse(
         remote_path=remote_path,
-        status_code=response.status_code
+        #status_code=response.status_code
     )
 
 
@@ -85,12 +102,4 @@ def check_processed_audio_inS3(request: DownloadRequest):
 
 @app.get("/")
 async def main():
-    content = """
-<body>
-<form action="/separate/" enctype="multipart/form-data" method="post">
-<input name="file" type="file">
-<input type="submit">
-</form>
-</body>
-    """
-    return HTMLResponse(content=content)
+    return 'hello'
