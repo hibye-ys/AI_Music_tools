@@ -1,5 +1,5 @@
 from fastapi import FastAPI, File, UploadFile, Form
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic_settings import BaseSettings
 import boto3
 import requests
@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from typing import Optional, Literal
 from pydantic import BaseModel, Field
 import json
+import uuid
 
 load_dotenv()
 
@@ -98,6 +99,35 @@ def check_processed_audio_inS3(request: DownloadRequest):
         instrum=f"https://s3musicproject.s3.amazonaws.com/{instrum_path}",
         status="Completed",
     )
+
+
+
+@app.post('/rvc_training')
+def request_rvc_training(folder: str = Form(...), 
+                         files: list[UploadFile] = File(...), user_id: str):
+    
+    s3 = get_s3_client(settings)
+    sqs = get_sqs_client(settings)
+    
+    response = []
+    for file in files:
+        # S3에 저장될 파일 이름 생성 (UUID를 사용하여 고유한 이름을 생성)
+        file_name = f"{folder}/{uuid.uuid4()}_{file.filename}"
+        
+        # 파일을 S3에 업로드
+        s3.upload_fileobj(file.file, 's3musicproject', file_name)
+
+        # 응답 목록에 업로드된 파일 정보 추가
+        response.append({"file_name": file.filename, "s3_object_name": file_name})
+    
+    queue = sqs.get_queue_by_name(QueueName='rvc_training.fifo')
+    response = queue.send_message(MessageGroupId=user_id,
+                                  #MessageDeduplicationId=remote_path,
+                                  MessageBody=json.dumps({"user_id": user_id}))
+
+    
+    
+    return JSONResponse(status_code=200, content={"uploaded_files": response})
 
 
 @app.get("/")
