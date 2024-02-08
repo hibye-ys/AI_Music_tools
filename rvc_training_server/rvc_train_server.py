@@ -92,9 +92,9 @@ def rvc_train_model(user_id: str):
         hop_length = 128 #@param {type:"slider", min:1, max:512, step:0}
         sr = int(sample_rate.rstrip('k'))*1000
         save_every_epoch = 5 #@param {type:"slider", min:1, max:100, step:0}
-        save_only_latest = False #@param{type:"boolean"}
-        save_every_weights = False #@param{type:"boolean"}
-        total_epoch = 10 #@param {type:"slider", min:1, max:10000, step:0}
+        save_only_latest = True #@param{type:"boolean"}
+        save_every_weights = True #@param{type:"boolean"}
+        total_epoch = 5 #@param {type:"slider", min:1, max:10000, step:0}
         batch_size = 15 #@param {type:"slider", min:1, max:25, step:0}
         gpu = 0 # @param {type:"number"}
         pitch_guidance = True #@param{type:"boolean"}
@@ -133,22 +133,20 @@ def rvc_train_model(user_id: str):
                 d_pretrained_path=None,
                 )
         
-        #pth_path
-        pth_files = glob.glob(logs_path + "*.pth")
-        if pth_files:
-            pth_path = pth_files[0]
-        else:
-            print("No .pth files found")
-            
-        #index_path 
-        index_files = glob.glob(logs_path + user_id + "*.index")
-        if index_files:
-            index_path = index_files[1]
-        else:
-            print("No .pth files found")
+
+        #upload pth, index files    
+        pth_paths = glob.glob(os.path.join(logs_path, user_id, '*.pth'))
+        g_path = pth_paths[0]
+        d_path = pth_paths[1]
         
-        s3.upload_file(pth_path, 's3musicproject', f'{user_id}/TrainingFiles')
-        s3.upload_file(index_path, 's3musicproject', f'{user_id}/TrainingFiles')
+        pth_path = glob.glob(os.path.join(logs_path, '*e.pth'))[0]
+        index_path = glob.glob(os.path.join(logs_path, user_id, 'trained_*.index'))[0]
+        
+        
+        s3.upload_file(g_path, 's3musicproject', f'{user_id}/TrainingFiles/{os.path.basename(g_path)}')
+        s3.upload_file(d_path, 's3musicproject', f'{user_id}/TrainingFiles/{os.path.basename(d_path)}')
+        s3.upload_file(pth_path, 's3musicproject', f'{user_id}/TrainingFiles/{os.path.basename(pth_path)}')
+        s3.upload_file(index_path, 's3musicproject', f'{user_id}/TrainingFiles/{os.path.basename(index_path)}')
         
         
 @app.post('/rvc_train_server')

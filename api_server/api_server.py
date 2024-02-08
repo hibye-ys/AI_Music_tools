@@ -103,8 +103,8 @@ def check_processed_audio_inS3(request: DownloadRequest):
 
 
 @app.post('/rvc_training')
-def request_rvc_training(folder: str = Form(...), 
-                         files: list[UploadFile] = File(...), user_id: str):
+def request_rvc_training(user_id: str, folder: str = Form(...), 
+                         files: list[UploadFile] = File(...)):
     
     s3 = get_s3_client(settings)
     sqs = get_sqs_client(settings)

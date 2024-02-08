@@ -184,6 +184,7 @@ def get_vc(weight_root, sid):
             cpt = None
     person = weight_root
     cpt = torch.load(person, map_location="cpu")
+    
     tgt_sr = cpt["config"][-1]
     cpt["config"][-3] = cpt["weight"]["emb_g.weight"].shape[0]
     if_f0 = cpt.get("f0", 1)
