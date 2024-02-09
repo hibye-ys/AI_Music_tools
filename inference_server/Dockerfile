@@ -13,4 +13,4 @@ RUN pip install -r requirements.txt
 COPY . .
 
 
-ENTRYPOINT [ "python", "run_server.py" ]
+ENTRYPOINT [ "python", "inference_server.py" ]

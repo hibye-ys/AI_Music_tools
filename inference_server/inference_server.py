@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile , HTTPException, BackgroundTasks, Form
+from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks, Form
 from fastapi.responses import HTMLResponse
 import requests
 import boto3
@@ -12,6 +12,7 @@ import tempfile
 import os
 import asyncio
 from dotenv import load_dotenv
+from typing import TypedDict
 
 load_dotenv()
 
@@ -24,13 +25,6 @@ class InferenceServerSettings(BaseSettings):
     REGION_NAME: str
 
 settings = InferenceServerSettings()
-
-@app.get("/")
-async def main():
-    return 'O_O'
-
-class InferenceRequest(BaseModel):
-    path: str = Form(...)
 
 
 def get_s3_client(settings: InferenceServerSettings):
@@ -73,33 +67,33 @@ def separate_model(path: str):
         s3.upload_file(instrum_local_path, "s3musicproject", instrum_remote_path)
 
 
+class InferenceMessage(TypedDict):
+    path: str
 
-@app.on_event('startup')
-async def start_message_polling():
-    sqs = get_sqs_client(settings)
-    queue_url = sqs.get_queue_url(QueueName='music.fifo')['QueueUrl']
-    
-    async def poll_sqs_messages():
-        while True:
-            messages = sqs.receive_message(
-                QueueUrl=queue_url,
-                MaxNumberOfMessages=10, # 한 번에 받을 최대 메시지 수
-                WaitTimeSeconds=20 # 롱 폴링 대기 시간
-            )
-            for message in messages:
-                try:
-                    message_body = json.loads(message.body)
-                    path = message_body['path']
-                    separate_model(path)
-                    
-                    message.delete()
-                except Exception as e:
-                    print(f'Error processing message: {e}')
-            
-            await asyncio.sleep(1) #wait for next polling
 
-    asyncio.create_task(poll_sqs_messages())
-    
+async def poll_sqs_messages():
+    while True:
+        messages = sqs.receive_message(
+            QueueUrl=queue_url,
+            MaxNumberOfMessages=1,
+            WaitTimeSeconds=20 # 롱 폴링 대기 시간
+            VisibilityTimeout=1000
+        )
+        for message in messages:
+            try:
+                message_body = json.loads(message.body)
+                path = message_body['path']
+                separate_model(path)
+                
+                message.delete()
+            except Exception as e:
+                print(f'Error processing message: {e}')
+        
+        await asyncio.sleep(1) #wait for next polling
+
+if __name__ == "__main__":
+    asyncio.run(poll_sqs_messages)
+
 '''###### process_audio #######
 @app.post('/inference')
 def process_audio(request: InferenceRequest, background_tasks: BackgroundTasks):
