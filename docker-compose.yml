@@ -9,7 +9,7 @@ services:
       - AWS_ACCESS_KEY=${AWS_ACCESS_KEY}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - REGION_NAME=ap-northeast-2
-      - INFERENCE_URL=http://inference-server:10000/inference
+     
 
   inference-server:
     build: ./inference_server
@@ -20,9 +20,26 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-    ports:
-      - "10000:10000"
+      mode: replicated
+      replicas: 2     
+
     environment:
       - AWS_ACCESS_KEY=${AWS_ACCESS_KEY}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - REGION_NAME=ap-northeast-2
+
+  rvc-training-server:
+    build: ./rvc_training_server
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    environment:
+      - AWS_ACCESS_KEY=${AWS_ACCESS_KEY}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - REGION_NAME=ap-northeast-2
+

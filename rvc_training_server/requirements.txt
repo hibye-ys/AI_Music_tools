@@ -5,6 +5,11 @@ numpy==1.23.5
 requests==2.31.0
 tqdm
 wget
+pydantic
+pydantic[dotenv]
+pydantic-settings
+python-dotenv
+boto3
 
 # Audio processing
 faiss-cpu==1.7.3
@@ -40,4 +45,4 @@ tensorboard
 ffmpy==0.3.1
 git+https://github.com/lanpa/tensorboardX
 edge-tts==6.1.9
-flask
+

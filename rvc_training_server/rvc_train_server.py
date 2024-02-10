@@ -1,5 +1,3 @@
-from fastapi import FastAPI, File, UploadFile , HTTPException, BackgroundTasks, Form
-from fastapi.responses import HTMLResponse
 import requests
 import boto3
 from botocore.exceptions import NoCredentialsError
@@ -29,19 +27,12 @@ from main import (
 
 load_dotenv()
 
-app = FastAPI()
-
-
-@app.get('/')
-async def main():
-    return 'Welcome to RVC_Train_Server'
-
 
 class InferenceServerSettings(BaseSettings):
     bucket_name: str = 's3musicproject'
-    AWS_ACCESS_KEY: str
-    AWS_SECRET_ACCESS_KEY: str
-    REGION_NAME: str
+    aws_access_key: str
+    aws_secret_access_key: str
+    region_name: str
 
 settings = InferenceServerSettings()
 
@@ -53,32 +44,33 @@ class rvcTrainRequest(BaseModel):
 def get_s3_client(settings: InferenceServerSettings):
     return boto3.client(
         's3',
-        aws_access_key_id=settings.AWS_ACCESS_KEY,
-        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-        region_name=settings.REGION_NAME,
+        aws_access_key_id=settings.aws_access_key,
+        aws_secret_access_key=settings.aws_secret_access_key,
+        region_name=settings.region_name,
     )
 
 def get_sqs_client(settings: InferenceServerSettings):
     return boto3.client(
         'sqs',
-        aws_access_key_id=settings.AWS_ACCESS_KEY,
-        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-        region_name=settings.REGION_NAME,
+        aws_access_key_id=settings.aws_access_key,
+        aws_secret_access_key=settings.aws_secret_access_key,
+        region_name=settings.region_name,
     )
     
     
-def rvc_train_model(user_id: str): 
+def rvc_train_model(user_id: rvcTrainRequest): 
     s3 = get_s3_client(settings)
     
     with tempfile.TemporaryDirectory() as temp_dir:
     
-        #download_dataset
-        for item in s3.list_objects(Bucket='s3musicproject', Prefix=f'{user_id}/TrainingDatasets/wavs')['Contents']:
+    
+        for item in s3.list_objects(Bucket='s3musicproject', Prefix=f'{user_id}/TrainingDatasets')['Contents']:
         
             file_name = os.path.basename(item['Key'])
             datasets = os.path.join(temp_dir, 'dataset')
             os.makedirs(datasets, exist_ok=True)
             s3.download_file('s3musicproject', item['Key'], os.path.join(datasets, file_name))
+        print('download complete')
         
         
         dataset_path = datasets
@@ -103,19 +95,18 @@ def rvc_train_model(user_id: str):
         #g_pretrained_path = f'/home/lee/workplace/rvc_server/logs/{model_name}' # @param {type:"string"}
         #d_pretrained_path = f'/home/lee/workplace/rvc_server/logs/{model_name}'
 
-        #preprocessing
         run_preprocess_script(logs_path=logs_path, 
                               model_name=model_name, 
                               dataset_path=dataset_path, 
                               sampling_rate=sr)
-        #extract_f0
+      
         run_extract_script(logs_path=logs_path, 
                            model_name=model_name, 
                            rvc_version=rvc_version, 
                            f0method=f0method, 
                            hop_length=hop_length, 
                            sampling_rate=sr)
-        #train
+        
         run_train_script(model_name=model_name,
                 rvc_version=rvc_version,
                 save_every_epoch=save_every_epoch,
@@ -134,7 +125,7 @@ def rvc_train_model(user_id: str):
                 )
         
 
-        #upload pth, index files    
+    
         pth_paths = glob.glob(os.path.join(logs_path, user_id, '*.pth'))
         g_path = pth_paths[0]
         d_path = pth_paths[1]
@@ -148,8 +139,29 @@ def rvc_train_model(user_id: str):
         s3.upload_file(pth_path, 's3musicproject', f'{user_id}/TrainingFiles/{os.path.basename(pth_path)}')
         s3.upload_file(index_path, 's3musicproject', f'{user_id}/TrainingFiles/{os.path.basename(index_path)}')
         
-        
-@app.post('/rvc_train_server')
-def rvc_training(request: rvcTrainRequest, background_tasks: BackgroundTasks):
-    background_tasks.add_task(rvc_train_model, request.user_id)
-    return {"status": "ok"}
+
+def poll_sqs_messages():
+    sqs = get_sqs_client(settings)
+    queue_url = sqs.get_queue_url(QueueName='rvc_training.fifo')['QueueUrl']
+    while True:
+        response = sqs.receive_message(
+            QueueUrl=queue_url,
+            MaxNumberOfMessages=1,
+            WaitTimeSeconds=30,
+            #VisibilityTimeout=1000
+        )
+        print(response)
+        messages = response.get('Messages', [])
+
+        for message in messages:
+            try:
+                message_body = json.loads(message['Body'])
+                user_id = message_body['user_id']
+                rvc_train_model(user_id)
+                
+                sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=message['ReceiptHandle'])
+            except Exception as e:
+                print(f'Error processing message: {e}')
+
+if __name__ == "__main__":
+    asyncio.run(poll_sqs_messages())

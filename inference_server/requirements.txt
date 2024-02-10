@@ -17,3 +17,4 @@ boto3
 requests
 pydantic
 pydantic[dotenv]
+pydantic-settings

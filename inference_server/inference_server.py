@@ -1,5 +1,3 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks, Form
-from fastapi.responses import HTMLResponse
 import requests
 import boto3
 from botocore.exceptions import NoCredentialsError
@@ -16,13 +14,12 @@ from typing import TypedDict
 
 load_dotenv()
 
-app = FastAPI()
 
 class InferenceServerSettings(BaseSettings):
     bucket_name: str = 's3musicproject'
-    AWS_ACCESS_KEY: str
-    AWS_SECRET_ACCESS_KEY: str
-    REGION_NAME: str
+    aws_access_key: str
+    aws_secret_access_key: str
+    region_name: str
 
 settings = InferenceServerSettings()
 
@@ -30,22 +27,21 @@ settings = InferenceServerSettings()
 def get_s3_client(settings: InferenceServerSettings):
     return boto3.client(
         's3',
-        aws_access_key_id=settings.AWS_ACCESS_KEY,
-        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-        region_name=settings.REGION_NAME,
+        aws_access_key_id=settings.aws_access_key,
+        aws_secret_access_key=settings.aws_secret_access_key,
+        region_name=settings.region_name,
     )
 
 def get_sqs_client(settings: InferenceServerSettings):
     return boto3.client(
         'sqs',
-        aws_access_key_id=settings.AWS_ACCESS_KEY,
-        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-        region_name=settings.REGION_NAME,
+        aws_access_key_id=settings.aws_access_key,
+        aws_secret_access_key=settings.aws_secret_access_key,
+        region_name=settings.region_name,
     )
 
 def separate_model(path: str):
     s3 = get_s3_client(settings)
-    sqs = get_sqs_client(settings)
     # 임시 디렉토리 설정
     with tempfile.TemporaryDirectory() as temp_dir:
         local_file_path = f"{temp_dir}/origin.wav"
@@ -71,31 +67,26 @@ class InferenceMessage(TypedDict):
     path: str
 
 
-async def poll_sqs_messages():
+def poll_sqs_messages():
+    sqs = get_sqs_client(settings)
+    queue_url = sqs.get_queue_url(QueueName='music.fifo')['QueueUrl']
     while True:
-        messages = sqs.receive_message(
+        response = sqs.receive_message(
             QueueUrl=queue_url,
             MaxNumberOfMessages=1,
-            WaitTimeSeconds=20 # 롱 폴링 대기 시간
+            WaitTimeSeconds=20,
             VisibilityTimeout=1000
         )
+        messages = response.get('Messages', [])
         for message in messages:
             try:
-                message_body = json.loads(message.body)
+                message_body = json.loads(message['Body'])
                 path = message_body['path']
                 separate_model(path)
                 
-                message.delete()
+                sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=message['ReceiptHandle'])
             except Exception as e:
                 print(f'Error processing message: {e}')
-        
-        await asyncio.sleep(1) #wait for next polling
 
 if __name__ == "__main__":
-    asyncio.run(poll_sqs_messages)
-
-'''###### process_audio #######
-@app.post('/inference')
-def process_audio(request: InferenceRequest, background_tasks: BackgroundTasks):
-    background_tasks.add_task(separate_model, request.path)
-    return {"status": "ok"}'''
+    asyncio.run(poll_sqs_messages())
