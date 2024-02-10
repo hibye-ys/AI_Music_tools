@@ -62,10 +62,7 @@ def rvc_train_model(user_id: rvcTrainRequest):
     s3 = get_s3_client(settings)
     
     with tempfile.TemporaryDirectory() as temp_dir:
-    
-    
-        for item in s3.list_objects(Bucket='s3musicproject', Prefix=f'{user_id}/TrainingDatasets')['Contents']:
-        
+        for item in s3.list_objects_v2(Bucket='s3musicproject', Prefix=f'{user_id}/TrainingDatasets')['Contents'][1:]:
             file_name = os.path.basename(item['Key'])
             datasets = os.path.join(temp_dir, 'dataset')
             os.makedirs(datasets, exist_ok=True)
@@ -140,19 +137,19 @@ def rvc_train_model(user_id: rvcTrainRequest):
         s3.upload_file(index_path, 's3musicproject', f'{user_id}/TrainingFiles/{os.path.basename(index_path)}')
         
 
-def poll_sqs_messages():
+async def poll_sqs_messages():
     sqs = get_sqs_client(settings)
     queue_url = sqs.get_queue_url(QueueName='rvc_training.fifo')['QueueUrl']
     while True:
         response = sqs.receive_message(
             QueueUrl=queue_url,
             MaxNumberOfMessages=1,
-            WaitTimeSeconds=30,
-            #VisibilityTimeout=1000
+            WaitTimeSeconds=10,
+            VisibilityTimeout=1000
         )
-        print(response)
-        messages = response.get('Messages', [])
 
+        messages = response.get('Messages', [])
+        print(messages)
         for message in messages:
             try:
                 message_body = json.loads(message['Body'])
@@ -162,6 +159,7 @@ def poll_sqs_messages():
                 sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=message['ReceiptHandle'])
             except Exception as e:
                 print(f'Error processing message: {e}')
+        await asyncio.sleep(1)
 
 if __name__ == "__main__":
     asyncio.run(poll_sqs_messages())
