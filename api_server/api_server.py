@@ -28,6 +28,10 @@ class DownloadRequest(BaseModel):
 class SeparateResponse(BaseModel):
     remote_path: str
     message_id: str
+
+class RVCinferenceResponse(BaseModel):
+    remote_path: str
+    message_id: str
     
 class TrainingResponse(BaseModel):
     message_id: str
@@ -118,6 +122,25 @@ def request_rvc_training(user_id: str = Form(...), files: list[UploadFile] = Fil
 
     
     return TrainingResponse(message_id=response['MessageId'])
+
+@app.post('/rvc_inference', response_model=RVCinferenceResponse)
+def request_rvc_training(user_id: str , audio: UploadFile = File(...)):
+    
+    s3 = get_s3_client(settings)
+    sqs = get_sqs_client(settings)
+    remote_path = f"{user_id}/rvc_inference/{audio.filename}"
+    s3.upload_fileobj(audio.file, settings.bucket_name, remote_path)
+
+
+    queue = sqs.get_queue_by_name(QueueName='rvc_inference.fifo')
+    response = queue.send_message(MessageGroupId=user_id,
+                                  MessageDeduplicationId=remote_path,
+                                  MessageBody=json.dumps({"filename": audio.filename, "user_id": user_id }))
+
+    return RVCinferenceResponse(
+        remote_path=remote_path,
+        message_id=response['MessageId']
+    )
 
 
 @app.get("/", response_class=HTMLResponse)
