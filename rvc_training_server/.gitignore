@@ -5,4 +5,4 @@ __pycache__
 logs
 .vscode
 rvc/pretraineds
-test.ipynb
+rvc_test.ipynb

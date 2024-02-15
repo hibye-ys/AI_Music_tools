@@ -6,3 +6,4 @@ pydantic
 pydantic[dotenv]
 requests
 ffmpeg-python
+pymongo

@@ -10,9 +10,9 @@ COPY ./requirements.txt ./requirements.txt
 
 RUN pip install -r requirements.txt
 
-RUN sudo apt update && sudo apt install ffmpeg
+RUN apt update && apt install -y ffmpeg
 
 COPY . .
 
 
-ENTRYPOINT [ "python", "rvc_train_server.py" ]
+ENTRYPOINT [ "python", "rvc_inference_server.py" ]

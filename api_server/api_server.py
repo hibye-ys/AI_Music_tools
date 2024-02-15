@@ -1,145 +1,208 @@
-from fastapi import FastAPI, File, UploadFile, Form
-from fastapi.responses import HTMLResponse, JSONResponse
-from pydantic_settings import BaseSettings
+import json
+import os
+import uuid
+from typing import Literal, Optional
+
 import boto3
 import requests
 from dotenv import load_dotenv
-from typing import Optional, Literal
+from fastapi import FastAPI, File, Form, UploadFile
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
-import json
-import uuid
-import os
+from pydantic_settings import BaseSettings
+from pymongo import MongoClient
+from pymongo.errors import PyMongoError
 
 load_dotenv()
 
 app = FastAPI()
 
+
 class APIServerSettings(BaseSettings):
-    bucket_name: str = 's3musicproject'
+    bucket_name: str = "s3musicproject"
     aws_access_key: str
     aws_secret_access_key: str
     region_name: str
+    mongodb_uri: str
+
 
 settings = APIServerSettings()
 
+
 class DownloadRequest(BaseModel):
-    file_prefix: str
-    
+    filename: str
+    user_id: str
+
+
 class SeparateResponse(BaseModel):
     remote_path: str
     message_id: str
+    user_id: str
+
 
 class RVCinferenceResponse(BaseModel):
     remote_path: str
     message_id: str
-    
+
+
 class TrainingResponse(BaseModel):
     message_id: str
-    
+
 
 class DownloadResponse(BaseModel):
     vocal: Optional[str]
     instrum: Optional[str]
     status: Literal["Processing", "Completed"]
-    
+
+
+class SaveToMongoDB(BaseModel):
+    user_id: str
+    file_uri: str
+
+
+class CheckMongoDB(BaseModel):
+    user_id: str
+    filename: str
+
 
 def get_s3_client(settings: APIServerSettings):
     return boto3.client(
-        's3',
+        "s3",
         aws_access_key_id=settings.aws_access_key,
         aws_secret_access_key=settings.aws_secret_access_key,
         region_name=settings.region_name,
     )
+
 
 def get_sqs_client(settings: APIServerSettings):
     return boto3.resource(
-        'sqs',
+        "sqs",
         aws_access_key_id=settings.aws_access_key,
         aws_secret_access_key=settings.aws_secret_access_key,
         region_name=settings.region_name,
     )
 
+
+def save_info_to_separation_mongodb(
+    save_data: SaveToMongoDB, settings: APIServerSettings
+):
+    mongo = MongoClient(settings.mongodb_uri)
+    db = mongo["music_tools"]
+    collection = db["separation"]
+
+    document = {"user_id": save_data.user_id, "file_uri": save_data.file_uri}
+
+    result = collection.insert_one(document)
+
+    return result.inserted_id
+
+
+def check_mongodb_for_download(requests: CheckMongoDB):
+    try:
+        mongo = MongoClient(settings.mongodb_uri)
+        db = mongo["music_tools"]
+        collection = db["separation_output"]
+        filename = os.path.splitext(requests.filename)[0]
+        query_result = collection.find_one(
+            {
+                "user_id": requests.user_id,
+                "vocal_uri": f"https://{settings.bucket_name}.s3.{settings.region_name}.amazonaws.com/public/separation/{requests.user_id}/{filename}_vocals.wav",
+                "instrum_uri": f"https://{settings.bucket_name}.s3.{settings.region_name}.amazonaws.com/public/separation/{requests.user_id}/{filename}_instrum.wav",
+            }
+        )
+
+        if query_result is None:
+            return "No download URI found", "No download URI found"
+
+        urls = [
+            query_result.get("vocal_uri", "No download URI found"),
+            query_result.get("instrum_uri", "No download URI found"),
+        ]
+        print(urls)
+        return urls
+    except PyMongoError as e:
+        print(f"MongoDB error: {e}")
+        return "Error querying MongoDB", "Error querying MongoDB"
 
 
 @app.post("/separate", response_model=SeparateResponse)
 def request_to_inference(user_id: str, audio: UploadFile = File(...)):
     s3 = get_s3_client(settings)
     sqs = get_sqs_client(settings)
-    remote_path = f"{user_id}/{audio.filename}"
+    remote_path = f"{user_id}/separation/{audio.filename}"
+    file_uri = f"https://s3musicproject.s3.{settings.region_name}.amazonaws.com/{user_id}/sepatation/{audio.filename}"
+
     s3.upload_fileobj(audio.file, settings.bucket_name, remote_path)
 
+    save_data = SaveToMongoDB(user_id=user_id, file_uri=file_uri)
+    save_info_to_separation_mongodb(save_data=save_data, settings=settings)
 
-    queue = sqs.get_queue_by_name(QueueName='music.fifo')
-    response = queue.send_message(MessageGroupId=user_id,
-                                  MessageDeduplicationId=remote_path,
-                                  MessageBody=json.dumps({"path": remote_path}))
+    queue = sqs.get_queue_by_name(QueueName="music.fifo")
+    response = queue.send_message(
+        MessageGroupId=user_id,
+        MessageDeduplicationId=remote_path,
+        MessageBody=json.dumps({"path": remote_path, "user_id": user_id}),
+    )
 
     return SeparateResponse(
-        remote_path=remote_path,
-        message_id=response['MessageId']
+        user_id=user_id, remote_path=remote_path, message_id=response["MessageId"]
     )
 
 
-@app.post('/download')
-def check_processed_audio_inS3(request: DownloadRequest):
+@app.post("/download", response_model=DownloadResponse)
+def download_separated_audio_files(request: DownloadRequest):
     s3 = get_s3_client(settings)
     try:
-        vocal_path = f'public/{request.file_prefix}_vocals.wav'
-        instrum_path = f'public/{request.file_prefix}_instrum.wav'
-        s3.head_object(Bucket=settings.bucket_name, Key=vocal_path)
-        s3.head_object(Bucket=settings.bucket_name, Key=instrum_path)
-    except s3.exceptions.NoSuchKey as e:
-        return DownloadResponse(
-            vocal=None,
-            instrum=None,
-            status="Processing"
-        )
-    return DownloadResponse(
-        vocal=f"https://s3musicproject.s3.amazonaws.com/{vocal_path}",
-        instrum=f"https://s3musicproject.s3.amazonaws.com/{instrum_path}",
-        status="Completed",
-    )
+        requests = CheckMongoDB(user_id=request.user_id, filename=request.filename)
+        urls = check_mongodb_for_download(requests)
+
+        if urls[0].startswith("No"):
+            return DownloadResponse(vocal=urls[0], instrum=urls[1], status="Processing")
+        else:
+            return DownloadResponse(vocal=urls[0], instrum=urls[1], status="Completed")
+
+    except Exception as e:
+        print(f"error: {e}")
 
 
-
-@app.post('/rvc_training')
+@app.post("/rvc_training", response_model=TrainingResponse)
 def request_rvc_training(user_id: str = Form(...), files: list[UploadFile] = File(...)):
-    
+
     s3 = get_s3_client(settings)
     sqs = get_sqs_client(settings)
 
-
     for file in files:
         file_basename = os.path.basename(file.filename)
-        file_name = f"{user_id}/TrainingDatasets/{file_basename}"        
-        s3.upload_fileobj(file.file, 's3musicproject', file_name)
+        file_name = f"{user_id}/TrainingDatasets/{file_basename}"
+        s3.upload_fileobj(file.file, "s3musicproject", file_name)
 
-    
-    queue = sqs.get_queue_by_name(QueueName='rvc_training.fifo')
-    response = queue.send_message(MessageGroupId=user_id,
-                                  MessageDeduplicationId=str(uuid.uuid4()),
-                                  MessageBody=json.dumps({"user_id": user_id}))
+    queue = sqs.get_queue_by_name(QueueName="rvc_training.fifo")
+    response = queue.send_message(
+        MessageGroupId=user_id,
+        MessageDeduplicationId=str(uuid.uuid4()),
+        MessageBody=json.dumps({"user_id": user_id}),
+    )
 
-    
-    return TrainingResponse(message_id=response['MessageId'])
+    return TrainingResponse(message_id=response["MessageId"])
 
-@app.post('/rvc_inference', response_model=RVCinferenceResponse)
-def request_rvc_training(user_id: str , audio: UploadFile = File(...)):
-    
+
+@app.post("/rvc_inference", response_model=RVCinferenceResponse)
+def request_rvc_training(user_id: str, audio: UploadFile = File(...)):
+
     s3 = get_s3_client(settings)
     sqs = get_sqs_client(settings)
     remote_path = f"{user_id}/rvc_inference/{audio.filename}"
     s3.upload_fileobj(audio.file, settings.bucket_name, remote_path)
 
-
-    queue = sqs.get_queue_by_name(QueueName='rvc_inference.fifo')
-    response = queue.send_message(MessageGroupId=user_id,
-                                  MessageDeduplicationId=remote_path,
-                                  MessageBody=json.dumps({"filename": audio.filename, "user_id": user_id }))
+    queue = sqs.get_queue_by_name(QueueName="rvc_inference.fifo")
+    response = queue.send_message(
+        MessageGroupId=user_id,
+        MessageDeduplicationId=remote_path,
+        MessageBody=json.dumps({"filename": audio.filename, "user_id": user_id}),
+    )
 
     return RVCinferenceResponse(
-        remote_path=remote_path,
-        message_id=response['MessageId']
+        remote_path=remote_path, message_id=response["MessageId"]
     )
 
 

@@ -9,6 +9,7 @@ services:
       - AWS_ACCESS_KEY=${AWS_ACCESS_KEY}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - REGION_NAME=ap-northeast-2
+      - MONGODB_URI = "mongodb://localhost:27017/"
      
 
   inference-server:
@@ -27,6 +28,7 @@ services:
       - AWS_ACCESS_KEY=${AWS_ACCESS_KEY}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - REGION_NAME=ap-northeast-2
+      - MONGODB_URI = "mongodb://localhost:27017/"
 
   rvc-training-server:
     build: ./rvc_training_server
@@ -42,6 +44,7 @@ services:
       - AWS_ACCESS_KEY=${AWS_ACCESS_KEY}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - REGION_NAME=ap-northeast-2
+      - MONGODB_URI = "mongodb://localhost:27017/"
 
   rvc-inference-server:
     build: ./rvc_inference_server
@@ -57,3 +60,4 @@ services:
       - AWS_ACCESS_KEY=${AWS_ACCESS_KEY}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - REGION_NAME=ap-northeast-2
+      - MONGODB_URI = "mongodb://localhost:27017/"
