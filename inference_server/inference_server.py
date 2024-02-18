@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings
 from pymongo import MongoClient
+from pymongo import ReturnDocument
 
 load_dotenv()
 
@@ -21,10 +22,11 @@ class InferenceServerSettings(BaseSettings):
     mongodb_uri: str
 
 
-class SaveToMongoDB(BaseModel):
+class FetchToDB(BaseModel):
     user_id: str
-    vocal_uri: str
-    instrum_uri: str
+    artist: str
+    vocal_url: str
+    instrum_url: str
 
 
 settings = InferenceServerSettings()
@@ -48,23 +50,20 @@ def get_sqs_client(settings: InferenceServerSettings):
     )
 
 
-def save_info_to_mongodb(save_data: SaveToMongoDB, settings: InferenceServerSettings):
+def fetch_to_db(save_data: FetchToDB, settings: InferenceServerSettings):
     mongo = MongoClient(settings.mongodb_uri)
     db = mongo["music_tools"]
-    collection = db["separation_output"]
+    collection = db["separation"]
 
-    document = {
-        "user_id": save_data.user_id,
-        "vocal_uri": save_data.vocal_uri,
-        "instrum_uri": save_data.instrum_uri,
-    }
-
-    result = collection.insert_one(document)
-
-    return result.inserted_id
+    collection.find_one_and_update(
+        {"user_id": save_data.user_id, "artist": save_data.artist},
+        {"$set": {"vocal_url": save_data.vocal_url, "instrum_url": save_data.instrum_url}},
+        return_document=ReturnDocument.AFTER,
+    )
+    return print("db update completed")
 
 
-def separate_model(path: str, user_id: str):
+def separate_model(path: str, user_id: str, artist: str):
     s3 = get_s3_client(settings)
     # 임시 디렉토리 설정
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -74,9 +73,7 @@ def separate_model(path: str, user_id: str):
         with open("options.json", "r") as file:
             options = json.load(file)
 
-        inference.predict_with_model(
-            input_audios=local_file_path, output_folder=temp_dir, options=options
-        )
+        inference.predict_with_model(input_audios=local_file_path, output_folder=temp_dir, options=options)
         vocal_local_path = f"{temp_dir}/origin_vocals.wav"
         instrum_local_path = f"{temp_dir}/origin_instrum.wav"
         vocal_remote_path = f"public/separation/{user_id}/{os.path.basename(os.path.splitext(path)[0])}_vocals.wav"
@@ -84,13 +81,11 @@ def separate_model(path: str, user_id: str):
         s3.upload_file(vocal_local_path, settings.bucket_name, vocal_remote_path)
         s3.upload_file(instrum_local_path, settings.bucket_name, instrum_remote_path)
 
-        vocal_uri = f"https://{settings.bucket_name}.s3.{settings.region_name}.amazonaws.com/{vocal_remote_path}"
-        instrum_uri = f"https://{settings.bucket_name}.s3.{settings.region_name}.amazonaws.com/{instrum_remote_path}"
+        vocal_url = f"https://{settings.bucket_name}.s3.{settings.region_name}.amazonaws.com/{vocal_remote_path}"
+        instrum_url = f"https://{settings.bucket_name}.s3.{settings.region_name}.amazonaws.com/{instrum_remote_path}"
 
-        save_data = SaveToMongoDB(
-            user_id=user_id, vocal_uri=vocal_uri, instrum_uri=instrum_uri
-        )
-        save_info_to_mongodb(save_data=save_data, settings=settings)
+        save_data = FetchToDB(user_id=user_id, vocal_url=vocal_url, instrum_url=instrum_url, artist=artist)
+        fetch_to_db(save_data=save_data, settings=settings)
 
 
 async def poll_sqs_messages():
@@ -110,11 +105,10 @@ async def poll_sqs_messages():
                 message_body = json.loads(message["Body"])
                 path = message_body["path"]
                 user_id = message_body["user_id"]
-                separate_model(path, user_id)
+                artist = message_body["artist"]
+                separate_model(path, user_id, artist)
 
-                sqs.delete_message(
-                    QueueUrl=queue_url, ReceiptHandle=message["ReceiptHandle"]
-                )
+                sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=message["ReceiptHandle"])
             except Exception as e:
                 print(f"Error processing message: {e}")
         await asyncio.sleep(1)
