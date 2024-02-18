@@ -44,12 +44,12 @@ class SeparateResponse(BaseModel):
     user_id: str
 
 
-class RVCinferenceResponse(BaseModel):
+class VCInferenceResponse(BaseModel):
     remote_path: str
     message_id: str
 
 
-class TrainingResponse(BaseModel):
+class VCTrainingResponse(BaseModel):
     message_id: str
 
 
@@ -96,11 +96,12 @@ def save_info_to_separationTask(save_data: SeparationTask, settings: APIServerSe
 
     document = {
         "user_id": save_data.user_id,
-        "file_url": save_data.Origin_file_url,
         "artist": save_data.artist,
+        "Origin_file_url": save_data.Origin_file_url,
         "vocal_url": None,
         "instrum_url": None,
-        "voice_conversion_url": None,
+        "trained": False,
+        "vc_vocal_url": None,
     }
 
     result = collection.insert_one(document)
@@ -118,8 +119,8 @@ def check_db_for_download(requests: CheckDB):
             {
                 "user_id": requests.user_id,
                 "artist": requests.artist,
-                "vocal_url": f"https://{settings.bucket_name}.s3.{settings.region_name}.amazonaws.com/public/separation/{requests.user_id}/{filename}_vocals.wav",
-                "instrum_url": f"https://{settings.bucket_name}.s3.{settings.region_name}.amazonaws.com/public/separation/{requests.user_id}/{filename}_instrum.wav",
+                "vocal_url": f"https://{settings.bucket_name}.s3.{settings.region_name}.amazonaws.com/public/{requests.user_id}/vocal/{filename}_vocals.wav",
+                "instrum_url": f"https://{settings.bucket_name}.s3.{settings.region_name}.amazonaws.com/public/{requests.user_id}/instrument/{filename}_instrum.wav",
             }
         )
 
@@ -127,10 +128,9 @@ def check_db_for_download(requests: CheckDB):
             return "No download URI found", "No download URI found"
 
         urls = [
-            query_result.get("vocal_url", "No download URI found"),
-            query_result.get("instrum_url", "No download URI found"),
+            query_result.get("vocal_url", "No download vocal URI found"),
+            query_result.get("instrum_url", "No download instrum URI found"),
         ]
-        print(urls)
         return urls
     except PyMongoError as e:
         print(f"MongoDB error: {e}")
@@ -141,9 +141,9 @@ def check_db_for_download(requests: CheckDB):
 def request_to_inference(user_id: str, artist: str, audio: UploadFile = File(...)):
     s3 = get_s3_client(settings)
     sqs = get_sqs_client(settings)
-    remote_path = f"{user_id}/separation/{audio.filename}"
+    remote_path = f"{user_id}/originFile/{audio.filename}"
     Origin_file_url = (
-        f"https://s3musicproject.s3.{settings.region_name}.amazonaws.com/{user_id}/separation/{audio.filename}"
+        f"https://s3musicproject.s3.{settings.region_name}.amazonaws.com/{user_id}/originFile/{audio.filename}"
     )
 
     s3.upload_fileobj(audio.file, settings.bucket_name, remote_path)
@@ -177,43 +177,43 @@ def download_separated_audio_files(request: DownloadRequest):
         print(f"error: {e}")
 
 
-@app.post("/rvc_training", response_model=TrainingResponse)
-def request_rvc_training(user_id: str = Form(...), files: list[UploadFile] = File(...)):
+@app.post("/vc_training", response_model=VCTrainingResponse)
+def request_vc_training(user_id: str, artist: str, files: list[UploadFile] = File(...)):
 
     s3 = get_s3_client(settings)
     sqs = get_sqs_client(settings)
 
     for file in files:
         file_basename = os.path.basename(file.filename)
-        file_name = f"{user_id}/TrainingDatasets/{file_basename}"
+        file_name = f"{user_id}/{artist}/TrainingDatasets/{file_basename}"
         s3.upload_fileobj(file.file, "s3musicproject", file_name)
 
     queue = sqs.get_queue_by_name(QueueName="rvc_training.fifo")
     response = queue.send_message(
         MessageGroupId=user_id,
         MessageDeduplicationId=str(uuid.uuid4()),
-        MessageBody=json.dumps({"user_id": user_id}),
+        MessageBody=json.dumps({"user_id": user_id, "artist": artist}),
     )
 
-    return TrainingResponse(message_id=response["MessageId"])
+    return VCTrainingResponse(message_id=response["MessageId"])
 
 
-@app.post("/rvc_inference", response_model=RVCinferenceResponse)
-def request_rvc_training(user_id: str, audio: UploadFile = File(...)):
+@app.post("/vc_inference", response_model=VCInferenceResponse)
+def request_vc_inference(user_id: str, artist: str, audio: UploadFile = File(...)):
 
     s3 = get_s3_client(settings)
     sqs = get_sqs_client(settings)
-    remote_path = f"{user_id}/rvc_inference/{audio.filename}"
+    remote_path = f"{user_id}/{artist}/rvc_inference/{audio.filename}"
     s3.upload_fileobj(audio.file, settings.bucket_name, remote_path)
 
     queue = sqs.get_queue_by_name(QueueName="rvc_inference.fifo")
     response = queue.send_message(
         MessageGroupId=user_id,
         MessageDeduplicationId=remote_path,
-        MessageBody=json.dumps({"filename": audio.filename, "user_id": user_id}),
+        MessageBody=json.dumps({"filename": audio.filename, "user_id": user_id, "artist": artist}),
     )
 
-    return RVCinferenceResponse(remote_path=remote_path, message_id=response["MessageId"])
+    return VCInferenceResponse(remote_path=remote_path, message_id=response["MessageId"])
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -221,9 +221,11 @@ async def main():
     html_content = """
     <!DOCTYPE html>
     <html>
-        <form action="/rvc_training" method="post" enctype="multipart/form-data">
+        <form action="/vc_training" method="post" enctype="multipart/form-data">
                 <label for="user_id">UserID:</label>
                 <input type="text" id="user_id" name="user_id" required><br><br>
+                <label for="artist">artist:</label>
+                <input type="text" id="artist" name="artist" required><br><br>
                 <label for="files">Select directory:</label>
                 <input type="file" id="files" name="files" webkitdirectory directory multiple><br><br>
                 <input type="submit" value="Upload">

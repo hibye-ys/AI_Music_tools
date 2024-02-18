@@ -51,7 +51,7 @@ def get_sqs_client(settings: InferenceServerSettings):
 
 
 def fetch_to_db(save_data: FetchToDB, settings: InferenceServerSettings):
-    mongo = MongoClient(settings.mongodb_uri)
+    mongo = MongoClient("mongodb://localhost:27017/")
     db = mongo["music_tools"]
     collection = db["separation"]
 
@@ -76,8 +76,10 @@ def separate_model(path: str, user_id: str, artist: str):
         inference.predict_with_model(input_audios=local_file_path, output_folder=temp_dir, options=options)
         vocal_local_path = f"{temp_dir}/origin_vocals.wav"
         instrum_local_path = f"{temp_dir}/origin_instrum.wav"
-        vocal_remote_path = f"public/separation/{user_id}/{os.path.basename(os.path.splitext(path)[0])}_vocals.wav"
-        instrum_remote_path = f"public/separation/{user_id}/{os.path.basename(os.path.splitext(path)[0])}_instrum.wav"
+        vocal_remote_path = f"public/{user_id}/vocal/{os.path.basename(os.path.splitext(path)[0])}_vocals.wav"
+        instrum_remote_path = (
+            f"public/separation/instrument/{user_id}/{os.path.basename(os.path.splitext(path)[0])}_instrum.wav"
+        )
         s3.upload_file(vocal_local_path, settings.bucket_name, vocal_remote_path)
         s3.upload_file(instrum_local_path, settings.bucket_name, instrum_remote_path)
 
