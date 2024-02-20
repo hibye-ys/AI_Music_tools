@@ -1,10 +1,12 @@
 import os
 import re
+import shutil
 import sys
 import zipfile
 from urllib.parse import unquote
 
 import requests
+import six
 import wget
 from bs4 import BeautifulSoup
 
@@ -19,7 +21,8 @@ def find_folder_parent(search_dir, folder_name):
 now_dir = os.getcwd()
 sys.path.append(now_dir)
 
-import rvc.lib.tools.gdown as gdown
+import gdown
+from rvc.lib.utils import format_title
 
 file_path = find_folder_parent(now_dir, "logs")
 
@@ -69,7 +72,7 @@ def download_from_url(url):
                 try:
                     gdown.download(
                         f"https://drive.google.com/uc?id={file_id}",
-                        quiet=False,
+                        quiet=True,
                         fuzzy=True,
                     )
                 except Exception as error:
@@ -92,11 +95,10 @@ def download_from_url(url):
 
             response = requests.get(url, stream=True)
             if response.status_code == 200:
-                file_name = url.split("/")[-1]
-                file_name = unquote(file_name)
-
-                file_name = re.sub(r"[^a-zA-Z0-9_.-]", "_", file_name)
-
+                content_disposition = six.moves.urllib_parse.unquote(response.headers["Content-Disposition"])
+                m = re.search(r'filename="([^"]+)"', content_disposition)
+                file_name = m.groups()[0]
+                file_name = file_name.replace(os.path.sep, "_")
                 total_size_in_bytes = int(response.headers.get("content-length", 0))
                 block_size = 1024
                 progress_bar_length = 50
@@ -185,9 +187,6 @@ def unzip_file(zip_path, zip_file_name):
 
 url = sys.argv[1]
 
-if "?download=true" in url:
-    url = url.replace("?download=true", "")
-
 verify = download_from_url(url)
 
 if verify == "downloaded":
@@ -197,13 +196,52 @@ if verify == "downloaded":
             zipfile_path = os.path.join(zips_path, filename)
             print("Proceeding with the extraction...")
 
-            model_name = os.path.basename(zipfile_path)
+            model_zip = os.path.basename(zipfile_path)
+            model_name = format_title(model_zip.split(".zip")[0])
             extract_folder_path = os.path.join(
                 "logs",
-                os.path.normpath(str(model_name).replace(".zip", "")),
+                os.path.normpath(model_name),
             )
 
             success = extract_and_show_progress(zipfile_path, extract_folder_path)
+
+            subfolders = [
+                f for f in os.listdir(extract_folder_path) if os.path.isdir(os.path.join(extract_folder_path, f))
+            ]
+            if len(subfolders) == 1:
+                subfolder_path = os.path.join(extract_folder_path, subfolders[0])
+                for item in os.listdir(subfolder_path):
+                    s = os.path.join(subfolder_path, item)
+                    d = os.path.join(extract_folder_path, item)
+                    shutil.move(s, d)
+                os.rmdir(subfolder_path)
+
+            for item in os.listdir(extract_folder_path):
+                if ".pth" in item:
+                    file_name = item.split(".pth")[0]
+                    if file_name != model_name:
+                        os.rename(
+                            os.path.join(extract_folder_path, item),
+                            os.path.join(extract_folder_path, model_name + ".pth"),
+                        )
+                else:
+                    if "v2" not in item:
+                        file_name = item.split("_nprobe_1_")[1].split("_v1")[0]
+                        if file_name != model_name:
+                            new_file_name = item.split("_nprobe_1_")[0] + "_nprobe_1_" + model_name + "_v1"
+                            os.rename(
+                                os.path.join(extract_folder_path, item),
+                                os.path.join(extract_folder_path, new_file_name + ".index"),
+                            )
+                    else:
+                        file_name = item.split("_nprobe_1_")[1].split("_v2")[0]
+                        if file_name != model_name:
+                            new_file_name = item.split("_nprobe_1_")[0] + "_nprobe_1_" + model_name + "_v2"
+                            os.rename(
+                                os.path.join(extract_folder_path, item),
+                                os.path.join(extract_folder_path, new_file_name + ".index"),
+                            )
+
             if success:
                 print(f"Model {model_name} downloaded!")
             else:

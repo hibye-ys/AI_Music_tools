@@ -1,4 +1,3 @@
-import os
 import re
 import unicodedata
 
@@ -7,10 +6,8 @@ import numpy as np
 
 
 def load_audio(file, sampling_rate):
-    # file = os.path.basename(file)
     try:
         file = file.strip(" ").strip('"').strip("\n").strip('"').strip(" ")
-
         out, _ = (
             ffmpeg.input(file, threads=0)
             .output("-", format="f32le", acodec="pcm_f32le", ac=1, ar=sampling_rate)

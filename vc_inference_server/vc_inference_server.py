@@ -93,8 +93,11 @@ def rvc_inference_model(request: rvcInferenceRequest):
         print("File for inference download complete")
 
         pth_file = glob.glob(os.path.join(logs_path, "*e.pth"))[0]
+        print("pth_file:", pth_file)
         index_path = glob.glob(os.path.join(logs_path, "trained_*.index"))[0]
+        print("index_path:", index_path)
         input_path = os.path.join(file_path, request.filename)
+        print("input_path:", input_path)
         output_path = os.path.join(file_path, f"{os.path.splitext(request.filename)[0]}_output.wav")
         output_remote_path = f"public/{request.user_id}/vc_vocal/{os.path.splitext(request.filename)[0]}_output.wav"
         f0method = "rmvpe"
@@ -119,6 +122,7 @@ def rvc_inference_model(request: rvcInferenceRequest):
         print("-" * 100)
 
         s3.upload_file(output_path, "s3musicproject", output_remote_path)
+        print("Upload completed")
 
         vc_vocal_url = f"https://{settings.bucket_name}.s3.{settings.region_name}.amazonaws.com/{output_remote_path}"
 

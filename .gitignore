@@ -7,3 +7,4 @@ inference_server/models/
 .venv/
 .env
 test.ipynb
+RVC_CLI.ipynb

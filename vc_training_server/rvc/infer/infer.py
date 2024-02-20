@@ -1,5 +1,7 @@
+import logging
 import os
 import sys
+import time
 
 import numpy as np
 import soundfile as sf
@@ -14,6 +16,8 @@ from rvc.lib.tools.split_audio import merge_audio
 from rvc.lib.tools.split_audio import process_audio
 from rvc.lib.utils import load_audio
 from vc_infer_pipeline import VC
+
+logging.getLogger("fairseq").setLevel(logging.WARNING)
 
 config = Config()
 
@@ -50,6 +54,7 @@ def vc_single(
     hop_length=None,
     output_path=None,
     split_audio=False,
+    f0autotune=False,
 ):
     global tgt_sr, net_g, vc, hubert_model, version
 
@@ -71,7 +76,7 @@ def vc_single(
         file_index = file_index.strip(" ").strip('"').strip("\n").strip('"').strip(" ").replace("trained", "added")
         if tgt_sr != resample_sr >= 16000:
             tgt_sr = resample_sr
-        if split_audio:
+        if split_audio == "True":
             result, new_dir_path = process_audio(input_audio_path)
             if result == "Error":
                 return "Error with Split Audio", None
@@ -99,6 +104,7 @@ def vc_single(
                         hop_length,
                         path,
                         False,
+                        f0autotune,
                     )
                     # new_dir_path
             except Exception as error:
@@ -130,6 +136,7 @@ def vc_single(
                 version,
                 protect,
                 hop_length,
+                f0autotune,
                 f0_file=f0_file,
             )
 
@@ -171,7 +178,6 @@ def get_vc(weight_root, sid):
             cpt = None
     person = weight_root
     cpt = torch.load(person, map_location="cpu")
-
     tgt_sr = cpt["config"][-1]
     cpt["config"][-3] = cpt["weight"]["emb_g.weight"].shape[0]
     if_f0 = cpt.get("f0", 1)
@@ -215,6 +221,8 @@ try:
 except IndexError:
     split_audio = None
 
+f0autotune = sys.argv[11]
+
 sid = f0up_key
 input_audio = audio_input_path
 f0_pitch = f0up_key
@@ -224,10 +232,13 @@ file_index = index_path
 index_rate = index_rate
 output_file = audio_output_path
 split_audio = split_audio
+f0autotune = f0autotune
 
 get_vc(model_path, 0)
 
+
 try:
+    start_time = time.time()
     result, audio_opt = vc_single(
         sid=0,
         input_audio_path=input_audio,
@@ -239,6 +250,7 @@ try:
         hop_length=hop_length,
         output_path=output_file,
         split_audio=split_audio,
+        f0autotune=f0autotune,
     )
 
     if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
@@ -246,7 +258,9 @@ try:
     else:
         message = result
 
-    print(f"Conversion completed. Output file: '{output_file}'")
+    end_time = time.time()  # Registra el tiempo de finalización de la conversión
+    elapsed_time = end_time - start_time
+    print(f"Conversion completed. Output file: '{output_file}' in {elapsed_time:.2f} seconds.")
 
 except Exception as error:
     print(f"Voice conversion failed: {error}")

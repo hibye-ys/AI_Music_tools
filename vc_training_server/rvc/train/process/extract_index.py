@@ -9,6 +9,7 @@ from sklearn.cluster import MiniBatchKMeans
 exp_dir = sys.argv[1]
 version = sys.argv[2]
 
+
 try:
     if version == "v1":
         feature_dir = os.path.join(exp_dir, "3_feature256")

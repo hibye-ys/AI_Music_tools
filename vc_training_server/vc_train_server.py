@@ -77,22 +77,21 @@ def vc_train_model(request: vcTrainRequest):
         )["Contents"][1:]:
             file_name = os.path.basename(item["Key"])
             s3.download_file("s3musicproject", item["Key"], os.path.join(datasets, file_name))
+            print(f'downloaded:{item["Key"]}')
         print("download complete")
 
         dataset_path = datasets
         logs_path = os.path.join(temp_dir, "logs")
         os.makedirs(logs_path, exist_ok=True)
         model_name = f"{request.user_id}/{request.artist}"  # @param {type:"string"}
-        sample_rate = "48k"  # @param ["32k", "40k", "48k"] {allow-input: false}
         sampling_rate = "48000"
         rvc_version = "v2"  # @param ["v2", "v1"] {allow-input: false}
         f0method = "rmvpe"  # @param ["pm", "dio", "crepe", "crepe-tiny", "harvest", "rmvpe"] {allow-input: false}
         hop_length = 128  # @param {type:"slider", min:1, max:512, step:0}
-        sr = int(sample_rate.rstrip("k")) * 1000
-        save_every_epoch = 5  # @param {type:"slider", min:1, max:100, step:0}
+        save_every_epoch = 20  # @param {type:"slider", min:1, max:100, step:0}
         save_only_latest = True  # @param{type:"boolean"}
         save_every_weights = True  # @param{type:"boolean"}
-        total_epoch = 5  # @param {type:"slider", min:1, max:10000, step:0}
+        total_epoch = 200  # @param {type:"slider", min:1, max:10000, step:0}
         batch_size = 15  # @param {type:"slider", min:1, max:25, step:0}
         gpu = 0  # @param {type:"number"}
         pitch_guidance = True  # @param{type:"boolean"}
@@ -101,7 +100,16 @@ def vc_train_model(request: vcTrainRequest):
         # g_pretrained_path = f'/home/lee/workplace/rvc_server/logs/{model_name}' # @param {type:"string"}
         # d_pretrained_path = f'/home/lee/workplace/rvc_server/logs/{model_name}'
 
-        run_preprocess_script(logs_path=logs_path, model_name=model_name, dataset_path=dataset_path, sampling_rate=sr)
+        print(dataset_path)
+        print(logs_path)
+        print(model_name)
+
+        run_preprocess_script(
+            logs_path=str(logs_path),
+            model_name=str(model_name),
+            dataset_path=dataset_path,
+            sampling_rate=str(sampling_rate),
+        )
 
         run_extract_script(
             logs_path=logs_path,
@@ -109,7 +117,7 @@ def vc_train_model(request: vcTrainRequest):
             rvc_version=rvc_version,
             f0method=f0method,
             hop_length=hop_length,
-            sampling_rate=sr,
+            sampling_rate=sampling_rate,
         )
 
         run_train_script(
@@ -130,26 +138,33 @@ def vc_train_model(request: vcTrainRequest):
             d_pretrained_path=None,
         )
 
-        pth_paths = glob.glob(os.path.join(logs_path, model_name, "*.pth"))
-        g_path = pth_paths[0]
-        d_path = pth_paths[1]
-        pth_path = glob.glob(os.path.join(logs_path, request.user_id, "*e.pth"))[0]
-        index_path = glob.glob(os.path.join(logs_path, model_name, "trained_*.index"))[0]
+        with open("lowestValue.txt", "r") as f:
+            lowestValue = str(f.read().strip())
+
+        g_path = glob.glob(os.path.join(logs_path, model_name, "G_*.pth"))[-1]
+        d_path = glob.glob(os.path.join(logs_path, model_name, "D_*.pth"))[-1]
+        index_path = glob.glob(os.path.join(logs_path, model_name, "trained_*.index"))[-1]
+        pths_path = glob.glob(os.path.join(logs_path, request.user_id, "*e.pth"))
+        for path in pths_path:
+            if path.split("_")[1].split("e")[0] == lowestValue:
+                pth_path = path
+            else:
+                pth_path = sorted(pths_path)[-1]
 
         s3.upload_file(g_path, "s3musicproject", f"{model_name}/TrainingFiles/{os.path.basename(g_path)}")
         s3.upload_file(d_path, "s3musicproject", f"{model_name}/TrainingFiles/{os.path.basename(d_path)}")
-        s3.upload_file(pth_path, "s3musicproject", f"{model_name}/TrainingFiles/{os.path.basename(pth_path)}")
         s3.upload_file(index_path, "s3musicproject", f"{model_name}/TrainingFiles/{os.path.basename(index_path)}")
+        s3.upload_file(pth_path, "s3musicproject", f"{model_name}/TrainingFiles/{os.path.basename(pth_path)}")
 
-        fetch_to_db(request.user_id, request.artist)
+        # fetch_to_db(request.user_id, request.artist)
 
 
-async def poll_sqs_messages():
+def poll_sqs_messages():
     sqs = get_sqs_client(settings)
     queue_url = sqs.get_queue_url(QueueName="rvc_training.fifo")["QueueUrl"]
     while True:
         response = sqs.receive_message(
-            QueueUrl=queue_url, MaxNumberOfMessages=1, WaitTimeSeconds=10, VisibilityTimeout=100
+            QueueUrl=queue_url, MaxNumberOfMessages=1, WaitTimeSeconds=5, VisibilityTimeout=60
         )
 
         messages = response.get("Messages", [])
@@ -165,7 +180,6 @@ async def poll_sqs_messages():
                 sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=message["ReceiptHandle"])
             except Exception as e:
                 print(f"Error processing message: {e}")
-        await asyncio.sleep(1)
 
 
 if __name__ == "__main__":
