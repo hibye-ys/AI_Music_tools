@@ -47,18 +47,18 @@ def run_infer_script(
     infer_script_path = os.path.join("rvc", "infer", "infer.py")
     command = [
         "python",
-        infer_script_path,
-        f0up_key,
-        filter_radius,
-        index_rate,
-        hop_length,
-        f0method,
-        input_path,
-        output_path,
-        pth_file,
-        index_path,
-        split_audio,
-        f0autotune,
+        str(infer_script_path),
+        str(f0up_key),
+        str(filter_radius),
+        str(index_rate),
+        str(hop_length),
+        str(f0method),
+        str(input_path),
+        str(output_path),
+        str(pth_file),
+        str(index_path),
+        str(split_audio),
+        str(f0autotune),
     ]
     subprocess.run(command)
     return f"File {input_path} inferred successfully.", output_path

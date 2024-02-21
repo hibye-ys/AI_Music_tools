@@ -7,3 +7,4 @@ logs
 rvc/pretraineds
 rvc_test.ipynb
 fcpe.pt
+lowestValue.txt

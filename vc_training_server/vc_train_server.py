@@ -95,14 +95,10 @@ def vc_train_model(request: vcTrainRequest):
         batch_size = 15  # @param {type:"slider", min:1, max:25, step:0}
         gpu = 0  # @param {type:"number"}
         pitch_guidance = True  # @param{type:"boolean"}
-        pretrained = False  # @param{type:"boolean"}
+        pretrained = True  # @param{type:"boolean"}
         custom_pretrained = False  # @param{type:"boolean"}
-        # g_pretrained_path = f'/home/lee/workplace/rvc_server/logs/{model_name}' # @param {type:"string"}
-        # d_pretrained_path = f'/home/lee/workplace/rvc_server/logs/{model_name}'
-
-        print(dataset_path)
-        print(logs_path)
-        print(model_name)
+        g_pretrained_path = "rvc/pretraineds/pretrained_v2/G48k.pth"
+        d_pretrained_path = "rvc/pretraineds/pretrained_v2/D48k.pth"
 
         run_preprocess_script(
             logs_path=str(logs_path),
@@ -134,8 +130,8 @@ def vc_train_model(request: vcTrainRequest):
             pretrained=pretrained,
             custom_pretrained=custom_pretrained,
             logs_path=logs_path,
-            g_pretrained_path=None,
-            d_pretrained_path=None,
+            g_pretrained_path=g_pretrained_path,
+            d_pretrained_path=d_pretrained_path,
         )
 
         with open("lowestValue.txt", "r") as f:
@@ -155,7 +151,7 @@ def vc_train_model(request: vcTrainRequest):
         s3.upload_file(d_path, "s3musicproject", f"{model_name}/TrainingFiles/{os.path.basename(d_path)}")
         s3.upload_file(index_path, "s3musicproject", f"{model_name}/TrainingFiles/{os.path.basename(index_path)}")
         s3.upload_file(pth_path, "s3musicproject", f"{model_name}/TrainingFiles/{os.path.basename(pth_path)}")
-
+        print("TraingFiles Upload completed")
         # fetch_to_db(request.user_id, request.artist)
 
 

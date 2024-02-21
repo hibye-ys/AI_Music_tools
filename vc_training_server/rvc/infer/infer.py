@@ -3,6 +3,9 @@ import os
 import sys
 import time
 
+now_dir = os.getcwd()
+sys.path.append(now_dir)
+
 import numpy as np
 import soundfile as sf
 import torch
@@ -63,7 +66,7 @@ def vc_single(
 
     f0_up_key = int(f0_up_key)
     try:
-        audio = load_audio(input_audio_path, 16000)
+        audio = load_audio(input_audio_path, 48000)
         audio_max = np.abs(audio).max() / 0.95
 
         if audio_max > 1:
@@ -74,7 +77,7 @@ def vc_single(
         if_f0 = cpt.get("f0", 1)
 
         file_index = file_index.strip(" ").strip('"').strip("\n").strip('"').strip(" ").replace("trained", "added")
-        if tgt_sr != resample_sr >= 16000:
+        if tgt_sr != resample_sr >= 48000:
             tgt_sr = resample_sr
         if split_audio == "True":
             result, new_dir_path = process_audio(input_audio_path)
