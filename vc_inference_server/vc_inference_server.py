@@ -106,6 +106,7 @@ def rvc_inference_model(request: rvcInferenceRequest):
         index_rate = 0.0
         hop_length = 128
         split_audio = False
+        f0autotune = False
 
         run_infer_script(
             f0up_key=f0up_key,
@@ -118,6 +119,7 @@ def rvc_inference_model(request: rvcInferenceRequest):
             pth_file=pth_file,
             index_path=index_path,
             split_audio=split_audio,
+            f0autotune=f0autotune,
         )
         print("-" * 100)
 
@@ -126,8 +128,8 @@ def rvc_inference_model(request: rvcInferenceRequest):
 
         vc_vocal_url = f"https://{settings.bucket_name}.s3.{settings.region_name}.amazonaws.com/{output_remote_path}"
 
-        save_data = FetchToDB(user_id=request.user_id, vc_vocal_url=vc_vocal_url, artist=request.artist)
-        fetch_to_db(save_data=save_data, settings=settings)
+        # save_data = FetchToDB(user_id=request.user_id, vc_vocal_url=vc_vocal_url, artist=request.artist)
+        # fetch_to_db(save_data=save_data, settings=settings)
 
 
 async def poll_sqs_messages():

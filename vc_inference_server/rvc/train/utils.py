@@ -82,14 +82,15 @@ def load_checkpoint(checkpoint_path, model, optimizer=None, load_opt=1):
 
     iteration = checkpoint_dict["iteration"]
     learning_rate = checkpoint_dict["learning_rate"]
+    loss = checkpoint_dict["loss"]
     if optimizer is not None and load_opt == 1:
         optimizer.load_state_dict(checkpoint_dict["optimizer"])
-    print(f"Loaded checkpoint '{checkpoint_path}' (epoch {iteration})")
-    return model, optimizer, learning_rate, iteration
+    print(f"Loaded checkpoint '{checkpoint_path}' (epoch {iteration}) (loss {loss})")
+    return model, optimizer, learning_rate, iteration, loss
 
 
-def save_checkpoint(model, optimizer, learning_rate, iteration, checkpoint_path):
-    print(f"Saved model '{checkpoint_path}' (epoch {iteration})")
+def save_checkpoint(model, optimizer, learning_rate, iteration, lowestloss, checkpoint_path):
+    print(f"Saved model '{checkpoint_path}' (epoch {iteration}) (loss {lowestloss})")
     if hasattr(model, "module"):
         state_dict = model.module.state_dict()
     else:
@@ -100,6 +101,7 @@ def save_checkpoint(model, optimizer, learning_rate, iteration, checkpoint_path)
             "iteration": iteration,
             "optimizer": optimizer.state_dict(),
             "learning_rate": learning_rate,
+            "loss": lowestloss,
         },
         checkpoint_path,
     )

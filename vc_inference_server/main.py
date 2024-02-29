@@ -15,17 +15,19 @@ from rvc.train.extract.preparing_files import generate_config
 from rvc.train.extract.preparing_files import generate_filelist
 
 config = Config()
-current_script_directory = os.path.dirname(os.path.realpath(__file__))
-logs_path = os.path.join(current_script_directory, "logs")
 
-# Check for prerequisites
-subprocess.run(["python", os.path.join("rvc", "lib", "tools", "prerequisites_download.py")])
+
+"""# Check for prerequisites
+subprocess.run(
+    ["python", os.path.join("rvc", "lib", "tools", "prerequisites_download.py")]
+)
 
 # Get TTS Voices
 with open(os.path.join("rvc", "lib", "tools", "tts_voices.json"), "r") as f:
     voices_data = json.load(f)
 
 locales = list({voice["Locale"] for voice in voices_data})
+"""
 
 
 # Infer
@@ -45,18 +47,18 @@ def run_infer_script(
     infer_script_path = os.path.join("rvc", "infer", "infer.py")
     command = [
         "python",
-        infer_script_path,
-        f0up_key,
-        filter_radius,
-        index_rate,
-        hop_length,
-        f0method,
-        input_path,
-        output_path,
-        pth_file,
-        index_path,
-        split_audio,
-        f0autotune,
+        str(infer_script_path),
+        str(f0up_key),
+        str(filter_radius),
+        str(index_rate),
+        str(hop_length),
+        str(f0method),
+        str(input_path),
+        str(output_path),
+        str(pth_file),
+        str(index_path),
+        str(split_audio),
+        str(f0autotune),
     ]
     subprocess.run(command)
     return f"File {input_path} inferred successfully.", output_path
@@ -164,16 +166,16 @@ def run_tts_script(
 
 
 # Preprocess
-def run_preprocess_script(model_name, dataset_path, sampling_rate):
+def run_preprocess_script(logs_path, model_name, dataset_path, sampling_rate):
     per = 3.0 if config.is_half else 3.7
     preprocess_script_path = os.path.join("rvc", "train", "preprocess", "preprocess.py")
     command = [
         "python",
-        preprocess_script_path,
-        os.path.join(logs_path, model_name),
-        dataset_path,
-        sampling_rate,
-        per,
+        str(preprocess_script_path),
+        str(os.path.join(logs_path, model_name)),
+        str(dataset_path),
+        str(sampling_rate),
+        str(per),
     ]
 
     os.makedirs(os.path.join(logs_path, model_name), exist_ok=True)
@@ -182,28 +184,28 @@ def run_preprocess_script(model_name, dataset_path, sampling_rate):
 
 
 # Extract
-def run_extract_script(model_name, rvc_version, f0method, hop_length, sampling_rate):
+def run_extract_script(logs_path, model_name, rvc_version, f0method, hop_length, sampling_rate):
     model_path = os.path.join(logs_path, model_name)
-    extract_f0_script_path = os.path.join("--rvc", "train", "extract", "extract_f0_print.py")
-    extract_feature_script_path = os.path.join("--rvc", "train", "extract", "extract_feature_print.py")
+    extract_f0_script_path = os.path.join("rvc", "train", "extract", "extract_f0_print.py")
+    extract_feature_script_path = os.path.join("rvc", "train", "extract", "extract_feature_print.py")
 
     command_1 = [
         "python",
-        extract_f0_script_path,
-        model_path,
-        f0method,
-        hop_length,
+        str(extract_f0_script_path),
+        str(model_path),
+        str(f0method),
+        str(hop_length),
     ]
     command_2 = [
         "python",
-        extract_feature_script_path,
-        config.device,
-        "1",
-        "0",
-        "0",
-        model_path,
-        rvc_version,
-        "True",
+        str(extract_feature_script_path),
+        str("cuda"),
+        str("1"),
+        str("0"),
+        str("0"),
+        str(model_path),
+        str(rvc_version),
+        str("True"),
     ]
     subprocess.run(command_1)
     subprocess.run(command_2)
@@ -227,6 +229,7 @@ def run_train_script(
     pitch_guidance,
     pretrained,
     custom_pretrained,
+    logs_path,
     g_pretrained_path=None,
     d_pretrained_path=None,
 ):
@@ -247,48 +250,48 @@ def run_train_script(
     train_script_path = os.path.join("rvc", "train", "train.py")
     command = [
         "python",
-        train_script_path,
+        str(train_script_path),
         "-se",
-        save_every_epoch,
+        str(save_every_epoch),
         "-te",
-        total_epoch,
+        str(total_epoch),
         "-pg",
-        pg,
+        str(pg),
         "-pd",
-        pd,
+        str(pd),
         "-sr",
-        sampling_rate,
+        str(sampling_rate),
         "-bs",
-        batch_size,
+        str(batch_size),
         "-g",
-        gpu,
+        str(gpu),
         "-e",
-        os.path.join(logs_path, model_name),
+        str(os.path.join(logs_path, model_name)),
         "-v",
-        rvc_version,
+        str(rvc_version),
         "-l",
-        latest,
+        str(latest),
         "-c",
-        "0",
+        str("0"),
         "-sw",
-        save_every,
+        str(save_every),
         "-f0",
-        f0,
+        str(f0),
     ]
 
     subprocess.run(command)
-    run_index_script(model_name, rvc_version)
+    run_index_script(logs_path=logs_path, model_name=model_name, rvc_version=rvc_version)
     return f"Model {model_name} trained successfully."
 
 
 # Index
-def run_index_script(model_name, rvc_version):
+def run_index_script(logs_path, model_name, rvc_version):
     index_script_path = os.path.join("rvc", "train", "process", "extract_index.py")
     command = [
         "python",
-        index_script_path,
-        os.path.join(logs_path, model_name),
-        rvc_version,
+        str(index_script_path),
+        str(os.path.join(logs_path, model_name)),
+        str(rvc_version),
     ]
 
     subprocess.run(command)
@@ -507,6 +510,7 @@ def parse_arguments():
 
     # Parser for 'preprocess' mode
     preprocess_parser = subparsers.add_parser("preprocess", help="Run preprocessing")
+    preprocess_parser.add_argument("--logs_path", type=str, help="logsPath")
     preprocess_parser.add_argument("--model_name", type=str, help="Name of the model")
     preprocess_parser.add_argument(
         "--dataset_path",

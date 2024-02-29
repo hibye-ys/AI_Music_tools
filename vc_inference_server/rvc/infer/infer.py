@@ -3,6 +3,9 @@ import os
 import sys
 import time
 
+now_dir = os.getcwd()
+sys.path.append(now_dir)
+
 import numpy as np
 import soundfile as sf
 import torch

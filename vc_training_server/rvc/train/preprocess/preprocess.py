@@ -57,10 +57,10 @@ class PreProcess:
             self.sr,
             tmp_audio.astype(np.float32),
         )
-        tmp_audio = librosa.resample(tmp_audio, orig_sr=self.sr, target_sr=48000)  # , res_type="soxr_vhq"
+        tmp_audio = librosa.resample(tmp_audio, orig_sr=self.sr, target_sr=16000)  # , res_type="soxr_vhq"
         wavfile.write(
             f"{self.wavs16k_dir}/{idx0}_{idx1}.wav",
-            48000,
+            16000,
             tmp_audio.astype(np.float32),
         )
 

@@ -83,22 +83,22 @@ def vc_train_model(request: vcTrainRequest):
         dataset_path = datasets
         logs_path = os.path.join(temp_dir, "logs")
         os.makedirs(logs_path, exist_ok=True)
-        model_name = f"{request.user_id}/{request.artist}"  # @param {type:"string"}
+        model_name = f"{request.user_id}/{request.artist}"
         sampling_rate = "48000"
-        rvc_version = "v2"  # @param ["v2", "v1"] {allow-input: false}
-        f0method = "rmvpe"  # @param ["pm", "dio", "crepe", "crepe-tiny", "harvest", "rmvpe"] {allow-input: false}
-        hop_length = 128  # @param {type:"slider", min:1, max:512, step:0}
-        save_every_epoch = 20  # @param {type:"slider", min:1, max:100, step:0}
-        save_only_latest = True  # @param{type:"boolean"}
-        save_every_weights = True  # @param{type:"boolean"}
-        total_epoch = 200  # @param {type:"slider", min:1, max:10000, step:0}
-        batch_size = 15  # @param {type:"slider", min:1, max:25, step:0}
-        gpu = 0  # @param {type:"number"}
-        pitch_guidance = True  # @param{type:"boolean"}
-        pretrained = True  # @param{type:"boolean"}
-        custom_pretrained = False  # @param{type:"boolean"}
-        g_pretrained_path = "rvc/pretraineds/pretrained_v2/G48k.pth"
-        d_pretrained_path = "rvc/pretraineds/pretrained_v2/D48k.pth"
+        rvc_version = "v2"
+        f0method = "rmvpe"
+        hop_length = 128
+        save_every_epoch = 10
+        save_only_latest = True
+        save_every_weights = False
+        total_epoch = 1000
+        batch_size = 16
+        gpu = 0
+        pitch_guidance = True
+        pretrained = True
+        custom_pretrained = False
+        g_pretrained_path = None
+        d_pretrained_path = None
 
         run_preprocess_script(
             logs_path=str(logs_path),
@@ -151,6 +151,7 @@ def vc_train_model(request: vcTrainRequest):
         s3.upload_file(d_path, "s3musicproject", f"{model_name}/TrainingFiles/{os.path.basename(d_path)}")
         s3.upload_file(index_path, "s3musicproject", f"{model_name}/TrainingFiles/{os.path.basename(index_path)}")
         s3.upload_file(pth_path, "s3musicproject", f"{model_name}/TrainingFiles/{os.path.basename(pth_path)}")
+
         print("TraingFiles Upload completed")
         # fetch_to_db(request.user_id, request.artist)
 
@@ -160,7 +161,7 @@ def poll_sqs_messages():
     queue_url = sqs.get_queue_url(QueueName="rvc_training.fifo")["QueueUrl"]
     while True:
         response = sqs.receive_message(
-            QueueUrl=queue_url, MaxNumberOfMessages=1, WaitTimeSeconds=5, VisibilityTimeout=60
+            QueueUrl=queue_url, MaxNumberOfMessages=1, WaitTimeSeconds=5, VisibilityTimeout=1000
         )
 
         messages = response.get("Messages", [])

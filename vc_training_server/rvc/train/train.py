@@ -190,10 +190,12 @@ def run(
 
     try:
         print("Starting training...")
-        _, _, _, epoch_str = load_checkpoint(latest_checkpoint_path(hps.model_dir, "D_*.pth"), net_d, optim_d)
-        _, _, _, epoch_str = load_checkpoint(latest_checkpoint_path(hps.model_dir, "G_*.pth"), net_g, optim_g)
+        _, _, _, epoch_str, loss = load_checkpoint(latest_checkpoint_path(hps.model_dir, "D_*.pth"), net_d, optim_d)
+        _, _, _, epoch_str, loss = load_checkpoint(latest_checkpoint_path(hps.model_dir, "G_*.pth"), net_g, optim_g)
         global_step = (epoch_str - 1) * len(train_loader)
 
+        lowestValue["value"] = loss
+        print(f"loss:{loss} | lowestValue:{lowestValue['value']}")
     except:
         epoch_str = 1
         global_step = 0
@@ -202,8 +204,14 @@ def run(
                 print(f"Loaded pretrained_G {hps.pretrainG}")
             if hasattr(net_g, "module"):
                 print(net_g.module.load_state_dict(torch.load(hps.pretrainG, map_location="cpu")["model"]))
+
             else:
                 print(net_g.load_state_dict(torch.load(hps.pretrainG, map_location="cpu")["model"]))
+
+            loss = torch.load(hps.pretrainG, map_location="cpu")["loss"]
+            lowestValue["value"] = loss
+            print(f"loss:{loss} | lowestValue:{lowestValue['value']}")
+
         if hps.pretrainD != "":
             if rank == 0:
                 print(f"Loaded pretrained_D {hps.pretrainD}")
@@ -427,7 +435,9 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, scaler, loaders, writers,
                     lowestValue["value"] = loss_gen_all
                     lowestValue["step"] = global_step
                     lowestValue["epoch"] = epoch
-
+                # print('*'*100)
+                # print(f'loss_gen_all:{loss_gen_all}, lowestValue:{lowestValue["value"]}')
+                # print('*'*100)
         optim_g.zero_grad()
         scaler.scale(loss_gen_all).backward()
         scaler.unscale_(optim_g)
@@ -480,24 +490,26 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, scaler, loaders, writers,
 
         global_step += 1
 
-    if epoch % hps.save_every_epoch == 0 and rank == 0:
-        checkpoint_suffix = "{}.pth".format(global_step if hps.if_latest == 0 else 2333333)
-        save_checkpoint(
-            net_g,
-            optim_g,
-            hps.train.learning_rate,
-            epoch,
-            os.path.join(hps.model_dir, "G_" + checkpoint_suffix),
-        )
-        save_checkpoint(
-            net_d,
-            optim_d,
-            hps.train.learning_rate,
-            epoch,
-            os.path.join(hps.model_dir, "D_" + checkpoint_suffix),
-        )
+        if lowestValue["value"] >= loss_gen_all and rank == 0:
+            checkpoint_suffix = "lowestValue.pth"  # "{:.2f}_{}.pth".format(loss_gen_all, epoch)
+            save_checkpoint(
+                net_g,
+                optim_g,
+                hps.train.learning_rate,
+                epoch,
+                lowestValue["value"],
+                os.path.join(hps.model_dir, "G_" + checkpoint_suffix),
+            )
+            save_checkpoint(
+                net_d,
+                optim_d,
+                hps.train.learning_rate,
+                epoch,
+                lowestValue["value"],
+                os.path.join(hps.model_dir, "D_" + checkpoint_suffix),
+            )
 
-        if rank == 0 and hps.save_every_weights == "1":
+            # if rank == 0 and hps.save_every_weights == "1":
             if hasattr(net_g, "module"):
                 ckpt = net_g.module.state_dict()
             else:
@@ -507,22 +519,22 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, scaler, loaders, writers,
                 hps.sample_rate,
                 hps.if_f0,
                 hps.name,
-                os.path.join(hps.model_dir, "{}_{}e.pth".format(hps.name, epoch)),
+                os.path.join(hps.model_dir, "{}_e.pth".format(hps.name)),
                 epoch,
                 hps.version,
                 hps,
             )
 
-    if rank == 0:
-        if epoch > 1:
-            change = last_loss_gen_all - loss_gen_all
-            change_str = ""
-            if change != 0:
-                change_str = f"({'decreased' if change > 0 else 'increased'} {abs(change)})"  # decreased = good
-            print(
-                f"{hps.name} | epoch={epoch} | step={global_step} | {epoch_recorder.record()} | loss_gen_all={round(loss_gen_all.item(), 3)} {change_str}"
-            )
-        last_loss_gen_all = loss_gen_all
+        if rank == 0:
+            if epoch > 1:
+                change = last_loss_gen_all - loss_gen_all
+                change_str = ""
+                if change != 0:
+                    change_str = f"({'decreased' if change > 0 else 'increased'} {abs(change)})"  # decreased = good
+                print(
+                    f"{hps.name} | epoch={epoch} | step={global_step} | {epoch_recorder.record()} | loss_gen_all={round(loss_gen_all.item(), 3)} {change_str}"
+                )
+            last_loss_gen_all = loss_gen_all
 
     if epoch >= hps.total_epoch and rank == 0:
         print(
@@ -530,6 +542,24 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, scaler, loaders, writers,
         )
         print(
             f"Lowest generator loss: {lowestValue['value']} at epoch {lowestValue['epoch']}, step {lowestValue['step']}"
+        )
+
+        checkpoint_suffix = "{}_{}_latest.pth".format(global_step if hps.if_latest == 0 else 2333333, epoch)
+        save_checkpoint(
+            net_g,
+            optim_g,
+            hps.train.learning_rate,
+            epoch,
+            lowestValue["value"],
+            os.path.join(hps.model_dir, "G_" + checkpoint_suffix),
+        )
+        save_checkpoint(
+            net_d,
+            optim_d,
+            hps.train.learning_rate,
+            epoch,
+            lowestValue["value"],
+            os.path.join(hps.model_dir, "D_" + checkpoint_suffix),
         )
 
         if hasattr(net_g, "module"):
@@ -542,13 +572,13 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, scaler, loaders, writers,
             hps.sample_rate,
             hps.if_f0,
             hps.name,
-            os.path.join(hps.model_dir, "{}_{}e.pth".format(hps.name, epoch)),
+            os.path.join(hps.model_dir, "{}_latest_{}e.pth".format(hps.name, epoch)),
             epoch,
             hps.version,
             hps,
         )
         sleep(1)
-        print(lowestValue)
+
         with open("lowestValue.txt", "w") as f:
             f.write(str(lowestValue["epoch"]))
 

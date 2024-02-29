@@ -233,12 +233,12 @@ def run_train_script(
     g_pretrained_path=None,
     d_pretrained_path=None,
 ):
-    f0 = 1 if pitch_guidance == "True" else 0
-    latest = 1 if save_only_latest == "True" else 0
-    save_every = 1 if save_every_weights == "True" else 0
+    f0 = 1 if str(pitch_guidance) == "True" else 0
+    latest = 1 if str(save_only_latest) == "True" else 0
+    save_every = 1 if str(save_every_weights) == "True" else 0
 
-    if pretrained == "True":
-        if custom_pretrained == "False":
+    if str(pretrained) == "True":
+        if str(custom_pretrained) == "False":
             pg, pd = pretrained_selector(f0)[rvc_version][sampling_rate]
         else:
             if g_pretrained_path is None or d_pretrained_path is None:

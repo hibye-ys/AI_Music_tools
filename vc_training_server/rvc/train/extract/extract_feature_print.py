@@ -39,7 +39,7 @@ print(out_path)
 
 def read_wave(wav_path, normalize=False):
     wav, sr = sf.read(wav_path)
-    assert sr == 48000
+    assert sr == 16000
     feats = torch.from_numpy(wav)
     feats = feats.half() if is_half else feats.float()
     feats = feats.mean(-1) if feats.dim() == 2 else feats

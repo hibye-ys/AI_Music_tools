@@ -12,6 +12,7 @@ device = sys.argv[1]
 n_parts = int(sys.argv[2])
 i_part = int(sys.argv[3])
 
+
 if len(sys.argv) == 7:
     exp_dir, version, is_half = sys.argv[4], sys.argv[5], bool(sys.argv[6])
 else:
@@ -33,6 +34,7 @@ model_path = "hubert_base.pt"
 wav_path = f"{exp_dir}/1_16k_wavs"
 out_path = f"{exp_dir}/3_feature256" if version == "v1" else f"{exp_dir}/3_feature768"
 os.makedirs(out_path, exist_ok=True)
+print(out_path)
 
 
 def read_wave(wav_path, normalize=False):
