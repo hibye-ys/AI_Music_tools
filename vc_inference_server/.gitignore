@@ -6,3 +6,4 @@ logs
 .vscode
 rvc/pretraineds
 test.ipynb
+.env

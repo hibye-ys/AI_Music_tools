@@ -17,10 +17,10 @@ load_dotenv()
 
 class InferenceServerSettings(BaseSettings):
     bucket_name: str = "s3musicproject"
-    aws_access_key: str
-    aws_secret_access_key: str
-    region_name: str
-    mongodb_uri: str
+    aws_access_key: str = os.environ.get("AWS_ACCESS_KEY")
+    aws_secret_access_key: str = os.environ.get("AWS_SECRET_ACCESS_KEY")
+    region_name: str = os.environ.get("REGION_NAME")
+    mongodb_uri: str = os.environ.get("MONGODB_URI")
 
 
 settings = InferenceServerSettings()
@@ -39,7 +39,7 @@ class FetchToDB(BaseModel):
 
 
 def fetch_to_db(save_data: FetchToDB, settings: InferenceServerSettings):
-    mongo = MongoClient("mongodb://localhost:27017/")
+    mongo = MongoClient(settings.mongodb_uri)
     db = mongo["music_tools"]
     collection = db["separation"]
 

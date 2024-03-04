@@ -8,7 +8,7 @@ services:
       - BUCKET_NAME=s3musicproject
       - AWS_ACCESS_KEY=${AWS_ACCESS_KEY}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - REGION_NAME=ap-northeast-2
+      - REGION_NAME=${REGION_NAME}
       - MONGODB_URI=${MONGODB_URI}
     
     depends_on:
@@ -29,7 +29,7 @@ services:
     environment:
       - AWS_ACCESS_KEY=${AWS_ACCESS_KEY}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - REGION_NAME=ap-northeast-2
+      - REGION_NAME=${REGION_NAME}
       - MONGODB_URI=${MONGODB_URI}
 
     depends_on:
@@ -48,7 +48,7 @@ services:
     environment:
       - AWS_ACCESS_KEY=${AWS_ACCESS_KEY}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - REGION_NAME=ap-northeast-2
+      - REGION_NAME=${REGION_NAME}
       - MONGODB_URI=${MONGODB_URI}
 
     depends_on:
@@ -68,7 +68,7 @@ services:
     environment:
       - AWS_ACCESS_KEY=${AWS_ACCESS_KEY}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - REGION_NAME=ap-northeast-2
+      - REGION_NAME=${REGION_NAME}
       - MONGODB_URI=${MONGODB_URI}
     depends_on:
       - mongodb
@@ -82,8 +82,8 @@ services:
       - mongodb_data:/data/db
     
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=root
-      - MONGO_INITDB_ROOT_PASSWORD=1234
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
   
   mongo-express:
     image: mongo-express
@@ -91,9 +91,9 @@ services:
     ports:
       - 8081:8081
     environment:
-      - ME_CONFIG_MONGODB_ADMINUSERNAME=root
-      - ME_CONFIG_MONGODB_ADMINPASSWORD=1234
-      - ME_CONFIG_MONGODB_URL=mongodb://root:1234@mongodb:27017
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=${MONGO_INITDB_ROOT_USERNAME}
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
+      - ME_CONFIG_MONGODB_URL=${MONGODB_URI}
       - ME_CONFIG_MONGODB_SERVER=mongodb
 volumes:
   mongodb_data:
