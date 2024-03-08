@@ -13,7 +13,10 @@
 - 자신이 녹음한 소리와 올바른 소리를 비교해 pitch guide 기능을 제공합니다
 
 ---
+### Architecture
+<img width="3242" alt="AI_Music_Tools" src="https://github.com/hibye-ys/AI_Music_tools/assets/57881969/9e241a2f-2548-4dd6-acb0-4d35ff6acc6f">
 
+---------------------
 ### Requirements
 
 - AWS 계정이 필요합니다 (AWS의 api Key를 환경변수에 지정)
