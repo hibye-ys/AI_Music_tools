@@ -54,9 +54,6 @@ docker-compose up
 
 ---
 
-### 사용 예제
-
----
 
 ### 프로젝트 진행상황
 
@@ -73,10 +70,8 @@ docker-compose up
   - ~~AI_Model Refactoring~~
   - ~~API, Queue, DB 시스템~~
   - Combine Voice Conversion and Instrument
-- Pitch Estimation
-  
-  - AI_Model Refactoring (진행중)
+- Pitch Estimation (추가예정)
+  - AI_Model Refactoring 
   - API, Queue, DB 시스템
-- 인터페이스 설계 및 프론트앤드
-  
-- 프론트엔드
+    
+- 인터페이스 설계 및 프론트앤드 (진행중)
