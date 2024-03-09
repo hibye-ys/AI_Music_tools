@@ -1,6 +1,6 @@
 # AI_Music_tools
 
-### 🎹 프로젝트 소개
+### 🎹 Introduction
 
 사용자가 원하는 노래를 처리한 후 노래를 부를 수 있는 기능을 제공합니다.
 그리고 사용자의 데이터를 학습해서 Ai_song_Cover, Pitch Extraction 기능을 제공합니다.
@@ -13,11 +13,11 @@
 - 자신이 녹음한 소리와 올바른 소리를 비교해 pitch guide 기능을 제공합니다
 
 ---
-### Architecture
+### ⚒️ Architecture
 <img width="3242" alt="AI_Music_Tools" src="https://github.com/hibye-ys/AI_Music_tools/assets/57881969/9e241a2f-2548-4dd6-acb0-4d35ff6acc6f">
 
 ---------------------
-### Requirements
+### 🔑 Requirements
 
 - AWS 계정이 필요합니다 (AWS의 api Key를 환경변수에 지정)
   
@@ -26,23 +26,28 @@
 
 ---
 
-### installation
+### 🧲 installation
 
-- Download the latest version
-  
-
+#### Download the latest version
 ```
 git clonehttps://github.com/hibye-ys/AI_Music_tools.git
 ```
 
-- Set AWS API key (.env)
-  
+#### AWS API Key & DB Setting
+- Download direnv
+  - see https://github.com/direnv/direnv/blob/master/docs/installation.md
+- Setup
+  - see https://github.com/direnv/direnv/blob/master/docs/hook.md
 
 ```python
-# make .env file and insert your API Key
+# make .envrc file and export your API Key
 AWS_ACCESS_KEY = ''
 AWS_SECRET_ACCESS_KEY = ''
 REGION_NAME = ''
+
+#implementation
+$ direnv allow
+
 ```
 
 - set docker containers
@@ -55,7 +60,7 @@ docker-compose up
 ---
 
 
-### 프로젝트 진행상황
+### ⏳ Project Progress
 
 - download songs (추가 예정)
   
