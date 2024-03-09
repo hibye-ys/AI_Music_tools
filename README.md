@@ -40,10 +40,21 @@ git clonehttps://github.com/hibye-ys/AI_Music_tools.git
   - see https://github.com/direnv/direnv/blob/master/docs/hook.md
 
 ```python
-# make .envrc file and export your API Key
-AWS_ACCESS_KEY = ''
-AWS_SECRET_ACCESS_KEY = ''
-REGION_NAME = ''
+# make .envrc file 
+$ touch .envrc
+
+# allow for .envrc
+$ direnv allow
+
+#export your settings in .envrc file
+$ vim .envrc
+
+export AWS_ACCESS_KEY=''
+export AWS_SECRET_ACCESS_KEY=''
+export REGION_NAME=''
+export MONGO_INITDB_ROOT_USERNAME=''
+export MONGO_INITDB_ROOT_PASSWORD=''
+export MONGODB_URI=''
 
 #implementation
 $ direnv allow
@@ -60,7 +71,7 @@ docker-compose up
 ---
 
 
-### ⏳ Project Progress
+### ⏳ Project Progress
 
 - download songs (추가 예정)
   
