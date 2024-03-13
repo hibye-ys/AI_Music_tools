@@ -35,8 +35,8 @@ services:
     depends_on:
       - mongodb
 
-  rvc-training-server:
-    build: ./rvc_training_server
+  vc-training-server:
+    build: ./vc_training_server
     deploy:
       resources:
         reservations:
@@ -55,8 +55,8 @@ services:
       - mongodb
 
 
-  rvc-inference-server:
-    build: ./rvc_inference_server
+  vc-inference-server:
+    build: ./vc_inference_server
     deploy:
       resources:
         reservations:

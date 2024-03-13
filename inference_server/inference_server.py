@@ -65,7 +65,6 @@ def fetch_to_db(save_data: FetchToDB, settings: InferenceServerSettings):
 
 def separate_model(path: str, user_id: str, artist: str):
     s3 = get_s3_client(settings)
-    # 임시 디렉토리 설정
     with tempfile.TemporaryDirectory() as temp_dir:
         local_file_path = f"{temp_dir}/origin.wav"
         s3.download_file("s3musicproject", path, local_file_path)
@@ -77,9 +76,7 @@ def separate_model(path: str, user_id: str, artist: str):
         vocal_local_path = f"{temp_dir}/origin_vocals.wav"
         instrum_local_path = f"{temp_dir}/origin_instrum.wav"
         vocal_remote_path = f"public/{user_id}/vocal/{os.path.basename(os.path.splitext(path)[0])}_vocals.wav"
-        instrum_remote_path = (
-            f"public/separation/instrument/{user_id}/{os.path.basename(os.path.splitext(path)[0])}_instrum.wav"
-        )
+        instrum_remote_path = f"public/{user_id}/instrument/{os.path.basename(os.path.splitext(path)[0])}_instrum.wav"
         s3.upload_file(vocal_local_path, settings.bucket_name, vocal_remote_path)
         s3.upload_file(instrum_local_path, settings.bucket_name, instrum_remote_path)
 

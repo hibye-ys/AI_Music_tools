@@ -1,24 +1,38 @@
+import io
 import json
 import os
+import tempfile
 import uuid
 from typing import Literal
 from typing import Optional
 
 import boto3
+import librosa
+import soundfile as sf
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi import File
 from fastapi import Form
 from fastapi import UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
+from smart_open import open
 
 load_dotenv()
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 모든 출처 허용, 실제 배포에서는 구체적인 도메인으로 제한
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class APIServerSettings(BaseSettings):
@@ -26,7 +40,7 @@ class APIServerSettings(BaseSettings):
     aws_access_key: str = os.environ.get("AWS_ACCESS_KEY")
     aws_secret_access_key: str = os.environ.get("AWS_SECRET_ACCESS_KEY")
     region_name: str = os.environ.get("REGION_NAME")
-    mongodb_uri: str = os.environ.get("MONGODB_URI")
+    mongodb_uri: str = "mongodb://localhost:27017"  # os.environ.get("MONGODB_URI")
 
 
 settings = APIServerSettings()
@@ -71,6 +85,11 @@ class CheckDB(BaseModel):
     filename: str
 
 
+class CheckTrain(BaseModel):
+    user_id: str
+    artist: str
+
+
 def get_s3_client(settings: APIServerSettings):
     return boto3.client(
         "s3",
@@ -111,7 +130,7 @@ def save_info_to_separationTask(save_data: SeparationTask, settings: APIServerSe
 
 def check_db_for_download(requests: CheckDB):
     try:
-        mongo = MongoClient(settings.mongodb_uri)
+        mongo = MongoClient("mongodb://localhost:27017")
         db = mongo["music_tools"]
         collection = db["separation"]
         filename = os.path.splitext(requests.filename)[0]
@@ -137,8 +156,48 @@ def check_db_for_download(requests: CheckDB):
         return "Error querying MongoDB", "Error querying MongoDB"
 
 
+def check_db_for_trained(user_id: str, artist: str):
+    try:
+        mongo = MongoClient("mongodb://localhost:27017")
+        db = mongo["music_tools"]
+        collection = db["separation"]
+        query_result = collection.find_one({"user_id": user_id, "artist": artist, "trained": True})
+
+        if query_result is None:
+            return str("not trained yet")
+
+        return str("Train Completed")
+    except PyMongoError as e:
+        print(f"MongoDB error: {e}")
+        return "Error querying MongoDB", "Error querying MongoDB"
+
+
+def check_db_for_inference(user_id: str, artist: str, filename: str):
+    try:
+        filename = os.path.splitext(filename)[0]
+        mongo = MongoClient("mongodb://localhost:27017")
+        db = mongo["music_tools"]
+        collection = db["separation"]
+        query_result = collection.find_one(
+            {
+                "user_id": user_id,
+                "artist": artist,
+                "trained": True,
+                "vc_vocal_url": f"https://{settings.bucket_name}.s3.{settings.region_name}.amazonaws.com/public/{user_id}/vc_vocal/{filename}_output.wav",
+            }
+        )
+
+        if query_result is None:
+            return str("No download VC URI found")
+
+        return query_result["vc_vocal_url"]
+    except PyMongoError as e:
+        print(f"MongoDB error: {e}")
+        return "Error querying MongoDB", "Error querying MongoDB"
+
+
 @app.post("/separate", response_model=SeparateResponse)
-def request_to_inference(user_id: str, artist: str, audio: UploadFile = File(...)):
+def request_to_inference(artist: str = "daftpunk", user_id: str = "123", audio: UploadFile = File(...)):
     s3 = get_s3_client(settings)
     sqs = get_sqs_client(settings)
     remote_path = f"{user_id}/originFile/{audio.filename}"
@@ -149,7 +208,7 @@ def request_to_inference(user_id: str, artist: str, audio: UploadFile = File(...
     s3.upload_fileobj(audio.file, settings.bucket_name, remote_path)
 
     save_data = SeparationTask(user_id=user_id, Origin_file_url=Origin_file_url, artist=artist)
-    save_info_to_separationTask(save_data=save_data, settings=settings)
+    # save_info_to_separationTask(save_data=save_data, settings=settings)
 
     queue = sqs.get_queue_by_name(QueueName="music.fifo")
     response = queue.send_message(
@@ -178,7 +237,7 @@ def download_separated_audio_files(request: DownloadRequest):
 
 
 @app.post("/vc_training", response_model=VCTrainingResponse)
-def request_vc_training(user_id: str, artist: str, files: list[UploadFile] = File(...)):
+def request_vc_training(user_id: str = "123", artist: str = "daftpunk", files: list[UploadFile] = File(...)):
 
     s3 = get_s3_client(settings)
     sqs = get_sqs_client(settings)
@@ -199,7 +258,7 @@ def request_vc_training(user_id: str, artist: str, files: list[UploadFile] = Fil
 
 
 @app.post("/vc_inference", response_model=VCInferenceResponse)
-def request_vc_inference(user_id: str, artist: str, audio: UploadFile = File(...)):
+def request_vc_inference(user_id: str = Form(...), artist: str = Form(...), audio: UploadFile = File(...)):
 
     s3 = get_s3_client(settings)
     sqs = get_sqs_client(settings)
@@ -216,20 +275,47 @@ def request_vc_inference(user_id: str, artist: str, audio: UploadFile = File(...
     return VCInferenceResponse(remote_path=remote_path, message_id=response["MessageId"])
 
 
-@app.get("/", response_class=HTMLResponse)
-async def main():
-    html_content = """
-    <!DOCTYPE html>
-    <html>
-        <form action="/vc_training" method="post" enctype="multipart/form-data">
-                <label for="user_id">UserID:</label>
-                <input type="text" id="user_id" name="user_id" required><br><br>
-                <label for="artist">artist:</label>
-                <input type="text" id="artist" name="artist" required><br><br>
-                <label for="files">Select directory:</label>
-                <input type="file" id="files" name="files" webkitdirectory directory multiple><br><br>
-                <input type="submit" value="Upload">
-        </form>
-    </html>
-    """
-    return HTMLResponse(content=html_content)
+@app.post("/vc_train_check")
+def request_train_check(request: CheckTrain):
+    try:
+        status = check_db_for_trained(request.user_id, request.artist)
+        return status
+
+    except Exception as e:
+        print(f"error: {e}")
+
+
+@app.post("/vc_inference_check")
+def request_inference_check(request: CheckDB):
+    try:
+        return check_db_for_inference(request.user_id, request.artist, request.filename)
+
+    except Exception as e:
+        print(f"error: {e}")
+
+
+@app.post("/combine_inferencedAudio")
+def request_combine_audios(url1: str, url2: str, user_id: str = "123"):
+    s3 = get_s3_client(settings)
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        with open(url1, "rb", transport_params={"client": s3}) as f:
+            vocal, sr = librosa.load(f)
+        with open(url2, "rb", transport_params={"client": s3}) as a:
+            inst, sr = librosa.load(a)
+
+        x = vocal + inst
+        output_filename = os.path.join(temp_dir, "VCcombined.wav")
+        sf.write(output_filename, x, sr)
+
+        audio_path = os.path.join(temp_dir, output_filename)
+        remote_path = f"public/{user_id}/vc_combined/VCcombined_ouput.wav"
+
+        s3.upload_file(audio_path, settings.bucket_name, remote_path)
+
+    return "Combined Success. Check DB"
+
+
+@app.get("/")
+def main():
+    return "Hello World"
