@@ -153,7 +153,7 @@ def vc_train_model(request: vcTrainRequest):
         s3.upload_file(pth_path, "s3musicproject", f"{model_name}/TrainingFiles/{os.path.basename(pth_path)}")
 
         print("TraingFiles Upload completed")
-        # fetch_to_db(request.user_id, request.artist)
+        fetch_to_db(request.user_id, request.artist)
 
 
 def poll_sqs_messages():

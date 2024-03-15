@@ -40,7 +40,7 @@ class APIServerSettings(BaseSettings):
     aws_access_key: str = os.environ.get("AWS_ACCESS_KEY")
     aws_secret_access_key: str = os.environ.get("AWS_SECRET_ACCESS_KEY")
     region_name: str = os.environ.get("REGION_NAME")
-    mongodb_uri: str = "mongodb://localhost:27017"  # os.environ.get("MONGODB_URI")
+    mongodb_uri: str = os.environ.get("MONGODB_URI")
 
 
 settings = APIServerSettings()
@@ -130,7 +130,7 @@ def save_info_to_separationTask(save_data: SeparationTask, settings: APIServerSe
 
 def check_db_for_download(requests: CheckDB):
     try:
-        mongo = MongoClient("mongodb://localhost:27017")
+        mongo = MongoClient(settings.mongodb_uri)
         db = mongo["music_tools"]
         collection = db["separation"]
         filename = os.path.splitext(requests.filename)[0]
@@ -158,7 +158,7 @@ def check_db_for_download(requests: CheckDB):
 
 def check_db_for_trained(user_id: str, artist: str):
     try:
-        mongo = MongoClient("mongodb://localhost:27017")
+        mongo = MongoClient(settings.mongodb_uri)
         db = mongo["music_tools"]
         collection = db["separation"]
         query_result = collection.find_one({"user_id": user_id, "artist": artist, "trained": True})
@@ -175,7 +175,7 @@ def check_db_for_trained(user_id: str, artist: str):
 def check_db_for_inference(user_id: str, artist: str, filename: str):
     try:
         filename = os.path.splitext(filename)[0]
-        mongo = MongoClient("mongodb://localhost:27017")
+        mongo = MongoClient(settings.mongodb_uri)
         db = mongo["music_tools"]
         collection = db["separation"]
         query_result = collection.find_one(
@@ -197,7 +197,7 @@ def check_db_for_inference(user_id: str, artist: str, filename: str):
 
 
 @app.post("/separate", response_model=SeparateResponse)
-def request_to_inference(artist: str = "daftpunk", user_id: str = "123", audio: UploadFile = File(...)):
+def request_to_inference(artist: str = Form(...), user_id: str = Form(...), audio: UploadFile = File(...)):
     s3 = get_s3_client(settings)
     sqs = get_sqs_client(settings)
     remote_path = f"{user_id}/originFile/{audio.filename}"
