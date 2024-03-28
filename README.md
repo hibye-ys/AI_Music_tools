@@ -84,7 +84,7 @@ docker-compose up
 - Voice Conversion
   - ~~AI_Model Refactoring~~
   - ~~API, Queue, DB 시스템~~
-  - Combine Voice Conversion and Instrument
+  - ~~Combine Voice Conversion and Instrument~~
     
 - Pitch Estimation (추가예정)
   - AI_Model Refactoring 
