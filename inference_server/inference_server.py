@@ -16,17 +16,18 @@ load_dotenv()
 
 class InferenceServerSettings(BaseSettings):
     bucket_name: str = "s3musicproject"
-    aws_access_key: str = os.environ.get("AWS_ACCESS_KEY")
-    aws_secret_access_key: str = os.environ.get("AWS_SECRET_ACCESS_KEY")
-    region_name: str = os.environ.get("REGION_NAME")
-    mongodb_uri: str = os.environ.get("MONGODB_URI")
+    aws_access_key: str
+    aws_secret_access_key: str
+    region_name: str
+    mongodb_uri: str
 
 
 class FetchToDB(BaseModel):
     user_id: str
     artist: str
-    vocal_url: str
-    instrum_url: str
+    vocal_url: str = None
+    instrum_url: str = None
+    vc_instrum_url: str = None
 
 
 settings = InferenceServerSettings()
@@ -51,19 +52,26 @@ def get_sqs_client(settings: InferenceServerSettings):
 
 
 def fetch_to_db(save_data: FetchToDB, settings: InferenceServerSettings):
-    mongo = MongoClient(settings.mongodb_uri)
+    mongo = MongoClient("mongodb://localhost:27017/")
     db = mongo["music_tools"]
-    collection = db["separation"]
+    collection = db["main"]
 
-    collection.find_one_and_update(
-        {"user_id": save_data.user_id, "artist": save_data.artist},
-        {"$set": {"vocal_url": save_data.vocal_url, "instrum_url": save_data.instrum_url}},
-        return_document=ReturnDocument.AFTER,
-    )
-    return print("db update completed")
+    if save_data.vc_instrum_url is None:
+        collection.find_one_and_update(
+            {"user_id": save_data.user_id, "artist": save_data.artist},
+            {"$set": {"vocal_url": save_data.vocal_url, "instrum_url": save_data.instrum_url}},
+            return_document=ReturnDocument.AFTER,
+        )
+    else:
+        collection.find_one_and_update(
+            {"user_id": save_data.user_id, "artist": save_data.artist},
+            {"$set": {"vc_instrum_url": save_data.vc_instrum_url}},
+            return_document=ReturnDocument.AFTER,
+        )
+        return print("db update completed")
 
 
-def separate_model(path: str, user_id: str, artist: str):
+def separate_model(path: str, user_id: str, artist: str, vc: bool):
     s3 = get_s3_client(settings)
     with tempfile.TemporaryDirectory() as temp_dir:
         local_file_path = f"{temp_dir}/origin.wav"
@@ -77,14 +85,31 @@ def separate_model(path: str, user_id: str, artist: str):
         instrum_local_path = f"{temp_dir}/origin_instrum.wav"
         vocal_remote_path = f"public/{user_id}/vocal/{os.path.basename(os.path.splitext(path)[0])}_vocals.wav"
         instrum_remote_path = f"public/{user_id}/instrument/{os.path.basename(os.path.splitext(path)[0])}_instrum.wav"
-        s3.upload_file(vocal_local_path, settings.bucket_name, vocal_remote_path)
-        s3.upload_file(instrum_local_path, settings.bucket_name, instrum_remote_path)
+        vc_instrum_remote_path = (
+            f"public/{user_id}/vc_instrument/{os.path.basename(os.path.splitext(path)[0])}_VCinstrum.wav"
+        )
 
-        vocal_url = f"https://{settings.bucket_name}.s3.{settings.region_name}.amazonaws.com/{vocal_remote_path}"
-        instrum_url = f"https://{settings.bucket_name}.s3.{settings.region_name}.amazonaws.com/{instrum_remote_path}"
+        if vc:
+            s3.upload_file(instrum_local_path, settings.bucket_name, vc_instrum_remote_path)
+            vc_instrum_url = (
+                f"https://{settings.bucket_name}.s3.{settings.region_name}.amazonaws.com/{vc_instrum_remote_path}"
+            )
+            save_data = FetchToDB(user_id=user_id, vc_instrum_url=vc_instrum_url, artist=artist)
+            fetch_to_db(save_data=save_data, settings=settings)
 
-        save_data = FetchToDB(user_id=user_id, vocal_url=vocal_url, instrum_url=instrum_url, artist=artist)
-        fetch_to_db(save_data=save_data, settings=settings)
+        else:
+            s3.upload_file(vocal_local_path, settings.bucket_name, vocal_remote_path)
+            s3.upload_file(instrum_local_path, settings.bucket_name, instrum_remote_path)
+
+            vocal_url = f"https://{settings.bucket_name}.s3.{settings.region_name}.amazonaws.com/{vocal_remote_path}"
+            instrum_url = (
+                f"https://{settings.bucket_name}.s3.{settings.region_name}.amazonaws.com/{instrum_remote_path}"
+            )
+
+            save_data = FetchToDB(user_id=user_id, vocal_url=vocal_url, instrum_url=instrum_url, artist=artist)
+            fetch_to_db(save_data=save_data, settings=settings)
+
+        print("Sepatation Completed")
 
 
 async def poll_sqs_messages():
@@ -105,7 +130,8 @@ async def poll_sqs_messages():
                 path = message_body["path"]
                 user_id = message_body["user_id"]
                 artist = message_body["artist"]
-                separate_model(path, user_id, artist)
+                vc = message_body["vc"]
+                separate_model(path, user_id, artist, vc)
 
                 sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=message["ReceiptHandle"])
             except Exception as e:

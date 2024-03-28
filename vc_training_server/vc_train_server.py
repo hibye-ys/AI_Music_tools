@@ -21,10 +21,10 @@ load_dotenv()
 
 class TrainingServerSettings(BaseSettings):
     bucket_name: str = "s3musicproject"
-    aws_access_key: str = os.environ.get("AWS_ACCESS_KEY")
-    aws_secret_access_key: str = os.environ.get("AWS_SECRET_ACCESS_KEY")
-    region_name: str = os.environ.get("REGION_NAME")
-    mongodb_uri: str = os.environ.get("MONGODB_URI")
+    aws_access_key: str
+    aws_secret_access_key: str
+    region_name: str
+    mongodb_uri: str
 
 
 settings = TrainingServerSettings()
@@ -54,9 +54,9 @@ def get_sqs_client(settings: TrainingServerSettings):
 
 
 def fetch_to_db(user_id: str, artist: str):
-    mongo = MongoClient(settings.mongodb_uri)
+    mongo = MongoClient("mongodb://localhost:27017/")
     db = mongo["music_tools"]
-    collection = db["separation"]
+    collection = db["main"]
 
     collection.find_one_and_update(
         {"user_id": user_id, "artist": artist},
@@ -90,8 +90,8 @@ def vc_train_model(request: vcTrainRequest):
         hop_length = 128
         save_every_epoch = 10
         save_only_latest = True
-        save_every_weights = False
-        total_epoch = 1000
+        save_every_weights = True
+        total_epoch = 100
         batch_size = 16
         gpu = 0
         pitch_guidance = True
@@ -101,10 +101,10 @@ def vc_train_model(request: vcTrainRequest):
         d_pretrained_path = None
 
         run_preprocess_script(
-            logs_path=str(logs_path),
-            model_name=str(model_name),
+            logs_path=logs_path,
+            model_name=model_name,
             dataset_path=dataset_path,
-            sampling_rate=str(sampling_rate),
+            sampling_rate=sampling_rate,
         )
 
         run_extract_script(
@@ -134,18 +134,11 @@ def vc_train_model(request: vcTrainRequest):
             d_pretrained_path=d_pretrained_path,
         )
 
-        with open("lowestValue.txt", "r") as f:
-            lowestValue = str(f.read().strip())
-
         g_path = glob.glob(os.path.join(logs_path, model_name, "G_*.pth"))[-1]
+        print(glob.glob(os.path.join(logs_path, model_name, "G_*.pth")))
         d_path = glob.glob(os.path.join(logs_path, model_name, "D_*.pth"))[-1]
         index_path = glob.glob(os.path.join(logs_path, model_name, "trained_*.index"))[-1]
-        pths_path = glob.glob(os.path.join(logs_path, request.user_id, "*e.pth"))
-        for path in pths_path:
-            if path.split("_")[1].split("e")[0] == lowestValue:
-                pth_path = path
-            else:
-                pth_path = sorted(pths_path)[-1]
+        pth_path = glob.glob(os.path.join(logs_path, request.user_id, "*e.pth"))[-1]
 
         s3.upload_file(g_path, "s3musicproject", f"{model_name}/TrainingFiles/{os.path.basename(g_path)}")
         s3.upload_file(d_path, "s3musicproject", f"{model_name}/TrainingFiles/{os.path.basename(d_path)}")
@@ -154,6 +147,7 @@ def vc_train_model(request: vcTrainRequest):
 
         print("TraingFiles Upload completed")
         fetch_to_db(request.user_id, request.artist)
+        print("DB update completed")
 
 
 def poll_sqs_messages():

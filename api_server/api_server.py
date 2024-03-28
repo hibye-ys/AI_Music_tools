@@ -1,13 +1,17 @@
 import io
 import json
 import os
+import subprocess
 import tempfile
+import urllib.parse
 import uuid
+from typing import List
 from typing import Literal
 from typing import Optional
 
 import boto3
 import librosa
+import numpy as np
 import soundfile as sf
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -20,6 +24,8 @@ from pydantic import BaseModel
 from pydantic_settings import BaseSettings
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
+from pytube import Search
+from pytube import YouTube
 from smart_open import open
 
 load_dotenv()
@@ -37,10 +43,10 @@ app.add_middleware(
 
 class APIServerSettings(BaseSettings):
     bucket_name: str = "s3musicproject"
-    aws_access_key: str = os.environ.get("AWS_ACCESS_KEY")
-    aws_secret_access_key: str = os.environ.get("AWS_SECRET_ACCESS_KEY")
-    region_name: str = os.environ.get("REGION_NAME")
-    mongodb_uri: str = os.environ.get("MONGODB_URI")
+    aws_access_key: str
+    aws_secret_access_key: str
+    region_name: str
+    mongodb_uri: str
 
 
 settings = APIServerSettings()
@@ -56,6 +62,7 @@ class SeparateResponse(BaseModel):
     remote_path: str
     message_id: str
     user_id: str
+    vc: bool
 
 
 class VCInferenceResponse(BaseModel):
@@ -90,6 +97,12 @@ class CheckTrain(BaseModel):
     artist: str
 
 
+class combineAudio(BaseModel):
+    url1: str
+    url2: str
+    user_id: str
+
+
 def get_s3_client(settings: APIServerSettings):
     return boto3.client(
         "s3",
@@ -109,9 +122,9 @@ def get_sqs_client(settings: APIServerSettings):
 
 
 def save_info_to_separationTask(save_data: SeparationTask, settings: APIServerSettings):
-    mongo = MongoClient(settings.mongodb_uri)
+    mongo = MongoClient("mongodb://localhost:27017/")
     db = mongo["music_tools"]
-    collection = db["separation"]
+    collection = db["main"]
 
     document = {
         "user_id": save_data.user_id,
@@ -121,6 +134,8 @@ def save_info_to_separationTask(save_data: SeparationTask, settings: APIServerSe
         "instrum_url": None,
         "trained": False,
         "vc_vocal_url": None,
+        "vc_instrum_url": None,
+        "vc_combined_url": None,
     }
 
     result = collection.insert_one(document)
@@ -130,9 +145,9 @@ def save_info_to_separationTask(save_data: SeparationTask, settings: APIServerSe
 
 def check_db_for_download(requests: CheckDB):
     try:
-        mongo = MongoClient(settings.mongodb_uri)
+        mongo = MongoClient("mongodb://localhost:27017/")
         db = mongo["music_tools"]
-        collection = db["separation"]
+        collection = db["main"]
         filename = os.path.splitext(requests.filename)[0]
         query_result = collection.find_one(
             {
@@ -158,9 +173,9 @@ def check_db_for_download(requests: CheckDB):
 
 def check_db_for_trained(user_id: str, artist: str):
     try:
-        mongo = MongoClient(settings.mongodb_uri)
+        mongo = MongoClient("mongodb://localhost:27017/")
         db = mongo["music_tools"]
-        collection = db["separation"]
+        collection = db["main"]
         query_result = collection.find_one({"user_id": user_id, "artist": artist, "trained": True})
 
         if query_result is None:
@@ -175,9 +190,9 @@ def check_db_for_trained(user_id: str, artist: str):
 def check_db_for_inference(user_id: str, artist: str, filename: str):
     try:
         filename = os.path.splitext(filename)[0]
-        mongo = MongoClient(settings.mongodb_uri)
+        mongo = MongoClient("mongodb://localhost:27017/")
         db = mongo["music_tools"]
-        collection = db["separation"]
+        collection = db["main"]
         query_result = collection.find_one(
             {
                 "user_id": user_id,
@@ -197,27 +212,37 @@ def check_db_for_inference(user_id: str, artist: str, filename: str):
 
 
 @app.post("/separate", response_model=SeparateResponse)
-def request_to_inference(artist: str = Form(...), user_id: str = Form(...), audio: UploadFile = File(...)):
+def request_to_inference(
+    artist: str = Form(...), user_id: str = Form(...), audio: UploadFile = File(...), vc: bool = False
+):
     s3 = get_s3_client(settings)
     sqs = get_sqs_client(settings)
-    remote_path = f"{user_id}/originFile/{audio.filename}"
-    Origin_file_url = (
-        f"https://s3musicproject.s3.{settings.region_name}.amazonaws.com/{user_id}/originFile/{audio.filename}"
-    )
+
+    if vc:
+        remote_path = f"{user_id}/vc_inference/{audio.filename}"
+        Origin_file_url = (
+            f"https://s3musicproject.s3.{settings.region_name}.amazonaws.com/{user_id}/vc_inference/{audio.filename}"
+        )
+
+    else:
+        remote_path = f"{user_id}/originFile/{audio.filename}"
+        Origin_file_url = (
+            f"https://s3musicproject.s3.{settings.region_name}.amazonaws.com/{user_id}/originFile/{audio.filename}"
+        )
 
     s3.upload_fileobj(audio.file, settings.bucket_name, remote_path)
 
     save_data = SeparationTask(user_id=user_id, Origin_file_url=Origin_file_url, artist=artist)
-    # save_info_to_separationTask(save_data=save_data, settings=settings)
+    save_info_to_separationTask(save_data=save_data, settings=settings)
 
     queue = sqs.get_queue_by_name(QueueName="music.fifo")
     response = queue.send_message(
         MessageGroupId=user_id,
-        MessageDeduplicationId=remote_path,
-        MessageBody=json.dumps({"path": remote_path, "user_id": user_id, "artist": artist}),
+        MessageDeduplicationId=artist,
+        MessageBody=json.dumps({"path": remote_path, "user_id": user_id, "artist": artist, "vc": vc}),
     )
 
-    return SeparateResponse(user_id=user_id, remote_path=remote_path, message_id=response["MessageId"])
+    return SeparateResponse(user_id=user_id, remote_path=remote_path, vc=vc, message_id=response["MessageId"])
 
 
 @app.post("/download", response_model=DownloadResponse)
@@ -237,7 +262,7 @@ def download_separated_audio_files(request: DownloadRequest):
 
 
 @app.post("/vc_training", response_model=VCTrainingResponse)
-def request_vc_training(user_id: str = "123", artist: str = "daftpunk", files: list[UploadFile] = File(...)):
+def request_vc_training(user_id: str = Form(...), artist: str = Form(...), files: List[UploadFile] = File(...)):
 
     s3 = get_s3_client(settings)
     sqs = get_sqs_client(settings)
@@ -268,7 +293,7 @@ def request_vc_inference(user_id: str = Form(...), artist: str = Form(...), audi
     queue = sqs.get_queue_by_name(QueueName="rvc_inference.fifo")
     response = queue.send_message(
         MessageGroupId=user_id,
-        MessageDeduplicationId=remote_path,
+        MessageDeduplicationId=str(uuid.uuid4()),
         MessageBody=json.dumps({"filename": audio.filename, "user_id": user_id, "artist": artist}),
     )
 
@@ -295,27 +320,73 @@ def request_inference_check(request: CheckDB):
 
 
 @app.post("/combine_inferencedAudio")
-def request_combine_audios(url1: str, url2: str, user_id: str = "123"):
+def request_combine_audios(request: combineAudio):
     s3 = get_s3_client(settings)
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        with open(url1, "rb", transport_params={"client": s3}) as f:
-            vocal, sr = librosa.load(f)
-        with open(url2, "rb", transport_params={"client": s3}) as a:
-            inst, sr = librosa.load(a)
+        with open(request.url1, "rb", transport_params={"client": s3}) as f:
+            vocal, sr = librosa.load(f, sr=48000)
+        with open(request.url2, "rb", transport_params={"client": s3}) as a:
+            inst, sr = librosa.load(a, sr=48000)
+
+        if len(vocal) > len(inst):
+            inst = np.pad(inst, (0, len(vocal) - len(inst)), "constant")
+        else:
+            vocal = np.pad(vocal, (0, len(inst) - len(vocal)), "constant")
 
         x = vocal + inst
         output_filename = os.path.join(temp_dir, "VCcombined.wav")
         sf.write(output_filename, x, sr)
 
         audio_path = os.path.join(temp_dir, output_filename)
-        remote_path = f"public/{user_id}/vc_combined/VCcombined_ouput.wav"
+        remote_path = f"public/{request.user_id}/vc_combined/VCcombined_ouput.wav"
 
         s3.upload_file(audio_path, settings.bucket_name, remote_path)
 
-    return "Combined Success. Check DB"
+        vc_combined_url = f"https://{settings.bucket_name}.s3.{settings.region_name}.amazonaws.com/public/{request.user_id}/vc_combined/VCcombined_ouput.wav"
+
+        return vc_combined_url
+
+
+@app.get("/download_youtube")
+def youtube_download(input: str, user_id: str):
+    s3 = get_s3_client(settings)
+
+    def convert_webm_to_wav(input_file, output_file):
+        command = ["ffmpeg", "-y", "-i", input_file, "-acodec", "pcm_s16le", "-ar", "48000", output_file]
+        subprocess.run(command, check=True)
+        os.remove(input_file)
+
+    def encode_if_korean(text):
+        if any("\uAC00" <= char <= "\uD7A3" for char in text):
+            return urllib.parse.quote(text)
+        else:
+            return text
+
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            if input.startswith("http"):
+                url = input
+            else:
+                input = input.replace(" ", "_")
+                s = Search(input)
+                video_url = str(s.results[0]).replace(">", "").split("videoId=")[-1]
+                url = f"https://www.youtube.com/watch?v={video_url}"
+            yt = YouTube(url)
+            download = yt.streams.filter(only_audio=True).order_by("abr").desc().first().download(temp_dir)
+            output = f"{temp_dir}/{input}.wav"
+            convert_webm_to_wav(download, output)
+            remote_path = f"public/{user_id}/youtube/{input}.wav"
+            with open(output, "rb") as data:
+                s3.upload_fileobj(data, settings.bucket_name, remote_path)
+            encoded_text = encode_if_korean(input)
+
+        return f"https://{settings.bucket_name}.s3.{settings.region_name}.amazonaws.com/public/{user_id}/youtube/{encoded_text}.wav"
+
+    except Exception as e:
+        print(f"error: {e}")
 
 
 @app.get("/")
 def main():
-    return "Hello World"
+    return "hello world"

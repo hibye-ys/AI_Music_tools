@@ -17,10 +17,10 @@ load_dotenv()
 
 class InferenceServerSettings(BaseSettings):
     bucket_name: str = "s3musicproject"
-    aws_access_key: str = os.environ.get("AWS_ACCESS_KEY")
-    aws_secret_access_key: str = os.environ.get("AWS_SECRET_ACCESS_KEY")
-    region_name: str = os.environ.get("REGION_NAME")
-    mongodb_uri: str = os.environ.get("MONGODB_URI")
+    aws_access_key: str
+    aws_secret_access_key: str
+    region_name: str
+    mongodb_uri: str
 
 
 settings = InferenceServerSettings()
@@ -39,9 +39,9 @@ class FetchToDB(BaseModel):
 
 
 def fetch_to_db(save_data: FetchToDB, settings: InferenceServerSettings):
-    mongo = MongoClient(settings.mongodb_uri)
+    mongo = MongoClient("mongodb://localhost:27017/")
     db = mongo["music_tools"]
-    collection = db["separation"]
+    collection = db["main"]
 
     collection.find_one_and_update(
         {"user_id": save_data.user_id, "artist": save_data.artist},
@@ -140,7 +140,7 @@ async def poll_sqs_messages():
             QueueUrl=queue_url,
             MaxNumberOfMessages=1,
             WaitTimeSeconds=5,
-            VisibilityTimeout=100,
+            VisibilityTimeout=60,
         )
 
         messages = response.get("Messages", [])

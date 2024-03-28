@@ -208,9 +208,12 @@ def run(
             else:
                 print(net_g.load_state_dict(torch.load(hps.pretrainG, map_location="cpu")["model"]))
 
-            loss = torch.load(hps.pretrainG, map_location="cpu")["loss"]
-            lowestValue["value"] = loss
-            print(f"loss:{loss} | lowestValue:{lowestValue['value']}")
+            try:
+                loss = torch.load(hps.pretrainG, map_location="cpu")["loss"]
+                lowestValue["value"] = loss
+                print(f"loss:{loss} | lowestValue:{lowestValue['value']}")
+            except:
+                pass
 
         if hps.pretrainD != "":
             if rank == 0:
