@@ -73,21 +73,21 @@ docker-compose up
 
 ### ⏳ Project Progress
 
-- download songs (추가 예정)
-  
-  - Coding
-  - API, Queue, DB 시스템
+- download songs
+  - ~~Coding~~
+  - ~~API, Queue, DB 시스템~~
+    
 - Separation
-  
   - ~~AI_Model Refactoring~~
   - ~~API, Queue, DB 시스템~~
+    
 - Voice Conversion
-  
   - ~~AI_Model Refactoring~~
   - ~~API, Queue, DB 시스템~~
   - Combine Voice Conversion and Instrument
+    
 - Pitch Estimation (추가예정)
   - AI_Model Refactoring 
   - API, Queue, DB 시스템
     
-- 인터페이스 설계 및 프론트앤드 (진행중)
+- ~~인터페이스 설계 및 프론트앤드~~
