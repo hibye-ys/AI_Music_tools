@@ -7,3 +7,4 @@ logs
 rvc/pretraineds
 test.ipynb
 .env
+rvc_test.ipynb

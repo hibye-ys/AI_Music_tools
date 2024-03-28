@@ -7,3 +7,6 @@ pydantic[dotenv]
 requests
 ffmpeg-python
 pymongo
+librosa
+smart-open
+pytube

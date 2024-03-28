@@ -1,0 +1,55 @@
+.Button {
+  display: flex;
+  padding-top: 100px;
+  flex-direction: column;
+}
+
+.VCButton {
+  background-color: rgb(25, 21, 215);
+  color: aliceblue;
+}
+
+.controls {
+  padding: auto;
+}
+
+.PlayButton {
+  background-color: aqua;
+  border: none;
+}
+
+.Download {
+  background-color: aqua;
+  border: none;
+  margin-left: 3px;
+}
+
+.Text1 {
+  margin-top: 30px;
+  margin-bottom: 0 auto;
+  color: aliceblue;
+  background-color: rgb(204, 22, 186);
+  float: left;
+  border-radius: 5px;
+  height: 35px;
+  width: 100px;
+  text-align: center;
+  font-family: sans-serif;
+}
+
+.Text2 {
+  margin-top: 30px;
+  margin-bottom: 0 auto;
+  color: aliceblue;
+  background-color: rgb(204, 22, 186);
+  float: left;
+  border-radius: 5px;
+  height: 35px;
+  width: 170px;
+  text-align: center;
+  font-family: sans-serif;
+}
+
+.Tabs {
+  color: aliceblue;
+}

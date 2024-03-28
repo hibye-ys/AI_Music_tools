@@ -1,0 +1,47 @@
+.mainContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%; /* 전체 너비를 사용 */
+}
+
+.formStyle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%; /* 필요하다면 조정 */
+  border: 5px dashed #0725cf;
+  height: 250px;
+  color: aliceblue;
+  cursor: pointer;
+  border-radius: 5px;
+  margin-top: 10px;
+  background-color: #121423;
+}
+.Text {
+  margin-top: 40px;
+  color: aliceblue;
+}
+
+.uploadedRow {
+  margin-top: 10px;
+}
+
+.uploadArea {
+  margin-top: 50px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  color: aliceblue;
+}
+
+.submitButton {
+  margin-top: 50px;
+  background-color: #9a24bd;
+  border: none;
+  border-radius: 10px;
+  color: aliceblue;
+  width: 150px;
+  height: 40px;
+}

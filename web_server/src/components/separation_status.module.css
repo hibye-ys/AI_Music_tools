@@ -1,0 +1,50 @@
+.StatusButton {
+  text-align: center;
+  margin-top: 300px;
+  border-radius: 100px;
+}
+
+.StatusText {
+  margin-top: 5px;
+  color: #eae4e4;
+}
+
+.button {
+  padding: 10px 20px;
+  background-color: #007bff;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  margin-bottom: 10px;
+  margin: 10px;
+}
+
+.processing {
+  margin-top: 30px;
+  padding-bottom: 50px;
+  display: grid;
+  font-size: xx-large;
+  color: #e0dbdb;
+  border-bottom: 10px rgb(255, 255, 255);
+}
+
+.PlayPause {
+  background-color: #141a92;
+  border: none;
+  font-family: Arial, Helvetica, sans-serif;
+  border-radius: 5px;
+  cursor: pointer;
+  float: left;
+  color: #f8ecec;
+  height: 30px;
+  margin-left: 20px;
+}
+
+.Download {
+  margin-left: 3px;
+  float: left;
+  color: #e0dbdb;
+  background-color: #900d9c;
+  border: none;
+}

@@ -1,5 +1,10 @@
 version: '3.9'
 services:
+  web-server:
+    build: ./web_server
+    ports:
+      - "5173:5173"
+
   api-server:
     build: ./api_server
     ports:

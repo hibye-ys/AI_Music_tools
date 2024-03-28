@@ -54,7 +54,7 @@ def get_sqs_client(settings: TrainingServerSettings):
 
 
 def fetch_to_db(user_id: str, artist: str):
-    mongo = MongoClient("mongodb://localhost:27017/")
+    mongo = MongoClient(settings.mongodb_uri)
     db = mongo["music_tools"]
     collection = db["main"]
 

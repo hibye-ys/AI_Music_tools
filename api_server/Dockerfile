@@ -10,6 +10,8 @@ COPY ./requirements.txt ./requirements.txt
 # 필요한 라이브러리 설치
 RUN pip install -r requirements.txt
 
+RUN apt-get update && apt-get install -y ffmpeg
+
 COPY . .
 
 # FastAPI 애플리케이션 실행

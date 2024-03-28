@@ -39,7 +39,7 @@ class FetchToDB(BaseModel):
 
 
 def fetch_to_db(save_data: FetchToDB, settings: InferenceServerSettings):
-    mongo = MongoClient("mongodb://localhost:27017/")
+    mongo = MongoClient(settings.mongodb_uri)
     db = mongo["music_tools"]
     collection = db["main"]
 

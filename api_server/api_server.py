@@ -122,7 +122,7 @@ def get_sqs_client(settings: APIServerSettings):
 
 
 def save_info_to_separationTask(save_data: SeparationTask, settings: APIServerSettings):
-    mongo = MongoClient("mongodb://localhost:27017/")
+    mongo = MongoClient(settings.mongodb_uri)
     db = mongo["music_tools"]
     collection = db["main"]
 
@@ -145,7 +145,7 @@ def save_info_to_separationTask(save_data: SeparationTask, settings: APIServerSe
 
 def check_db_for_download(requests: CheckDB):
     try:
-        mongo = MongoClient("mongodb://localhost:27017/")
+        mongo = MongoClient(settings.mongodb_uri)
         db = mongo["music_tools"]
         collection = db["main"]
         filename = os.path.splitext(requests.filename)[0]
@@ -173,7 +173,7 @@ def check_db_for_download(requests: CheckDB):
 
 def check_db_for_trained(user_id: str, artist: str):
     try:
-        mongo = MongoClient("mongodb://localhost:27017/")
+        mongo = MongoClient(settings.mongodb_uri)
         db = mongo["music_tools"]
         collection = db["main"]
         query_result = collection.find_one({"user_id": user_id, "artist": artist, "trained": True})
@@ -190,7 +190,7 @@ def check_db_for_trained(user_id: str, artist: str):
 def check_db_for_inference(user_id: str, artist: str, filename: str):
     try:
         filename = os.path.splitext(filename)[0]
-        mongo = MongoClient("mongodb://localhost:27017/")
+        mongo = MongoClient(settings.mongodb_uri)
         db = mongo["music_tools"]
         collection = db["main"]
         query_result = collection.find_one(

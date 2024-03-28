@@ -1,0 +1,20 @@
+.recording {
+  border: none;
+  border-radius: 5px;
+  background-color: rgba(204, 12, 225, 0.889);
+  color: rgb(217, 216, 216);
+}
+
+.PlayPause {
+  border: none;
+  border-radius: 5px;
+  background-color: rgba(12, 44, 226, 0.889);
+  color: rgb(217, 216, 216);
+}
+
+.Download {
+  border: none;
+  border-radius: 5px;
+  background-color: rgba(35, 35, 146, 0.889);
+  color: rgb(217, 216, 216);
+}
